@@ -1,0 +1,23 @@
+[package]
+name = "TAP" #Tree-Automata Prototype
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+#error logging stuff
+thiserror = "1.0.31"
+log = "0.4.17"
+
+
+
+# hashmap stuff
+fxhash = "0.2.1"
+hashbrown = "0.12.1"
+indexmap = "1.8.1"
+daggy = "0.8.0"
+
+# for the serde-1 feature
+serde = { version = "1.0.137", features = ["derive"], optional = true }

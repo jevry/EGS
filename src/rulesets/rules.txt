@@ -1,0 +1,10 @@
+#these exaple rules were found in "towards an efficient..."
+
+Term = f(Term,Term)
+| g(Term,Term)
+| h(Term)
+| a() | b() | c() | d()
+| q(int)
+| sons(Term*)
+| C1() | C2(Term) | C3(Term)| C4(Term,Term)
+| transition(config:Term,state:Term)
