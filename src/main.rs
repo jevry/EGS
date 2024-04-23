@@ -49,20 +49,19 @@ fn print_some_glob_stuff(mut g: Globals){
 
 
 fn print_dag(mut g: Dag<u32, u32>){
+    if (g.node_count()== 0) {return;}
+
     for n in g.raw_nodes() {
         //runs once for every node in the network
     }
-
+    let temp = g.raw_nodes();
     let w1 = g.children(node_index(0));
-    fn do_once<F>(mut func: F)
-    where F: FnMut()
-    {
-        func();
-    };
+
 
     
 
-    let mut expensive_closure = | mut num1: &Dag<u32, u32>, mut num2: u32| -> bool {
+    let mut expensive_closure =
+                |arg0: &Dag<u32, u32>, arg1: &(daggy::EdgeIndex, NodeIndex)| -> bool {
         let a = true;
         return a;
     };
@@ -72,8 +71,8 @@ fn print_dag(mut g: Dag<u32, u32>){
     let w2 =
         TakeWhile::new(w1, expensive_closure);
 
-    for (e, n) in w1.iter(&g){
-        print!("{:?} {:?}\n", e, n);
+    for (e, n) in w2.iter(&g){
+        print!("we be walkin nodes {:?} {:?}\n", e, n);
     }
 }
 
@@ -101,7 +100,6 @@ fn main() {
     let idx = graph.add_node(1);
     graph.add_child(idx, 1, 1);
     graph.add_child(idx, 1, 1);
-    print!("{:?}\n", idx);
     print_dag(graph);
 
     
