@@ -61,8 +61,8 @@ fn print_dag(mut g: Dag<u32, u32>){
     };
 
     
-    let mut x: usize = 1;
-    let mut expensive_closure = | num1: GraphRef<u32, u32>, mut num2: u32| -> bool {
+
+    let mut expensive_closure = | mut num1: &Dag<u32, u32>, mut num2: u32| -> bool {
         let a = true;
         return a;
     };
