@@ -1,11 +1,5 @@
-1. tree:
--   nodes
--   node traversal functions
-
-2. automata:
--   states
--   rules
--   alphabet
+2. union finding:
+-   but for DAGs
 
 3. term generator:
 -   ???

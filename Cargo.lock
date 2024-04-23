@@ -3,19 +3,6 @@
 version = 3
 
 [[package]]
-name = "TAP"
-version = "0.1.0"
-dependencies = [
- "daggy",
- "fxhash",
- "hashbrown 0.12.3",
- "indexmap 1.9.3",
- "log",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "ahash"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -195,6 +182,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tap"
+version = "0.1.0"
+dependencies = [
+ "daggy",
+ "fxhash",
+ "hashbrown 0.12.3",
+ "indexmap 1.9.3",
+ "log",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]

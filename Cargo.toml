@@ -1,5 +1,5 @@
 [package]
-name = "TAP" #Tree-Automata Prototype
+name = "tap" #Tree-Automata Prototype
 version = "0.1.0"
 edition = "2021"
 
@@ -17,7 +17,7 @@ log = "0.4.17"
 fxhash = "0.2.1"
 hashbrown = "0.12.1"
 indexmap = "1.8.1"
-daggy = "0.8.0"
+daggy = {version = "0.8.0", features = ["stable_dag"] }
 
 # for the serde-1 feature
 serde = { version = "1.0.137", features = ["derive"], optional = true }
