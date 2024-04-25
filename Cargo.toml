@@ -12,7 +12,6 @@ thiserror = "1.0.31"
 log = "0.4.17"
 
 
-
 # hashmap stuff
 fxhash = "0.2.1"
 hashbrown = "0.12.1"
@@ -21,3 +20,7 @@ daggy = {version = "0.8.0", features = ["stable_dag"] }
 
 # for the serde-1 feature
 serde = { version = "1.0.137", features = ["derive"], optional = true }
+
+# S expr
+symbol_table = { version = "0.2.0", features = ["global"] }
+symbolic_expressions = "5.0.3"
