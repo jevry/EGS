@@ -1,3 +1,0 @@
-#ignore this line
-
-3*3*3

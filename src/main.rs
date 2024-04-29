@@ -19,14 +19,29 @@ macro_rules! mstr { //simplify string::from function
     };
 }
 
+pub struct  Id{
+    pub int: u32,
+}
+
+// pub struct EClass {
+//     /// This eclass's id.
+//     pub id: Id,
+//     /// The equivalent enodes in this equivalence class.
+//     pub nodes: Vec,
+// }
+
+
 
 
 fn main() {
-
+    let path = "src/testsuite/";
+    let filename = "ints/nested_add.txt";
 
 
     use util;
-    let r = parser::parse_file("src/tes.txt").unwrap();
+
+    let buf = format!("{path}{filename}");
+    let r = parser::parse_file(&buf).unwrap();
 
     pretty_print(&r, 10);
 
