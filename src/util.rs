@@ -1,14 +1,15 @@
 //to do the sexp stuff
 use symbolic_expressions::Sexp;
 
+//print out a Sexpr in a pretty manner
 pub fn pretty_print(sexp: &Sexp, width: usize){
     let mut buf = String::new();
-    pretty_print_string(&mut buf, sexp, width, 1).unwrap();
+    format_pretty_string(&mut buf, sexp, width, 1).unwrap();
     print!("\n{}\n\n", buf);
 }
 
-
-pub fn pretty_print_string(
+//formats the string
+pub fn format_pretty_string(
     buf: &mut String,
     sexp: &Sexp,
     width: usize,
@@ -26,7 +27,7 @@ pub fn pretty_print_string(
                     write!(buf, "   ")?;
                 }
             }
-            pretty_print_string(buf, val, width, level + 1)?;
+            format_pretty_string(buf, val, width, level + 1)?;
             if !indent && i < list.len() - 1 {
                 write!(buf, "  ")?;
             }

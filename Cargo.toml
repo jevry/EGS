@@ -24,3 +24,8 @@ serde = { version = "1.0.137", features = ["derive"], optional = true }
 # S expr
 symbol_table = { version = "0.2.0", features = ["global"] }
 symbolic_expressions = "5.0.3"
+
+# fun fact, for some reason code vector == dynamically resizeable array
+smallvec = { version = "1.8.0", features = ["union", "const_generics"] }
+
+vectorize = { version = "0.2.0", optional = true }
