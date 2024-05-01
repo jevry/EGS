@@ -215,7 +215,6 @@ dependencies = [
  "hashbrown 0.12.3",
  "indexmap 1.9.3",
  "log",
- "serde",
  "smallvec",
  "symbol_table",
  "symbolic_expressions",
