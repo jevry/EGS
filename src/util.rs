@@ -1,6 +1,15 @@
 //to do the sexp stuff
 use symbolic_expressions::Sexp;
 
+#[macro_export]
+macro_rules! mstr { //simplify String::from function
+    ( $($x:expr)? ) =>{
+        $( String::from($x) )+
+    };
+}
+pub(crate) use mstr;
+
+
 //print out a Sexpr in a pretty manner
 pub fn pretty_print(sexp: &Sexp, width: usize){
     let mut buf = String::new();

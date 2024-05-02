@@ -61,14 +61,13 @@ impl UnionFind {
 }
 
 
-//run this test function to get a bit of insight how the unionfind works
 #[cfg(test)]
 mod tests {
     use super::*; //allows this module to use previous scope
 
 
     #[test]
-    fn union_find() {
+    fn union_find() { //run this test function to get a bit of insight how the unionfind works
         let n = 10;
         let id = Id::from;
 
