@@ -11,7 +11,7 @@ pub struct UnionFind {
 
 //all functions of the UnionFind struct
 impl UnionFind {
-    pub fn make_set(&mut self) -> Id {
+    pub fn new_set(&mut self) -> Id {
         let id = Id::from(self.parents.len());
         self.parents.push(id);
         return id;
@@ -32,7 +32,7 @@ impl UnionFind {
         &mut self.parents[usize::from(query)]
     }
 
-    //finds the canonical ID, for example in UF[0,3,0,2] find(1) loops from id==1 to id==3 to id==2 to id==0
+    //finds the canonical ID without editing the graph
     pub fn find(&self, mut current: Id) -> Id {
         while current != self.parent(current) {
             current = self.parent(current)
@@ -40,8 +40,9 @@ impl UnionFind {
         return current;
     }
 
-    //finds the canonical ID, then sets all nodes in the set to point directly towards the canonical ID
-    //(e.g the previous example UF[0,3,0,2] would be set to UF[0,0,0,0])
+    // finds the canonical ID, then sets all nodes in the set to point directly towards the canonical ID
+    // for example in UF[0,3,0,2,4] find(1) loops from id==1 to id==3 to id==2 to id==0
+    // then UF is set to [0,0,0,0,4]
     pub fn find_mut(&mut self, mut current: Id) -> Id {
         while current != self.parent(current) {
             let grandparent = self.parent(self.parent(current));
@@ -52,12 +53,18 @@ impl UnionFind {
     }
 
     /// unions 2 nodes
-    pub fn union(&mut self, node1: Id, node2: Id) -> Id {
-        let root1 = self.find(node1);
-        let root2 = self.find(node2);
+    pub fn union(&mut self, id1: Id, id2: Id) -> Id {
+        let root1 = self.find(id1);
+        let root2 = self.find(id2);
         *self.parent_mut(root2) = root1;
         return root1;
     }
+
+    //checks if 2 nodes are in the same set
+    pub fn in_same_set(&mut self, id1:Id, id2:Id) -> bool {
+        return self.find(id1) == self.find(id2);
+    }
+
 }
 
 
@@ -74,7 +81,8 @@ mod tests {
         let mut uf = UnionFind::default();
         print!("base set:                   {:?}\n", uf);
         for _ in 0..n {
-            uf.make_set();
+            uf.new_set();
+            
         }
 
         // test the initial condition of everyone in their own set
