@@ -13,9 +13,9 @@ impl From<Id> for usize { //cast Id to usize, used as usize::from(n)
     }
 }
 #[macro_export]
-macro_rules! id { //simplify Id::from function
+macro_rules! itoid { //simplify Id::from function
     ( $($x:expr)? ) =>{
         $( Id::from($x) )+
     };
 }
-pub(crate) use id;
+pub(crate) use itoid;

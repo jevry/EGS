@@ -1,8 +1,10 @@
-use crate::id::{id, Id};
+use crate::id::Id;
 use crate::util::{mstr, pretty_print};
-
-
 use symbolic_expressions::{Sexp, SexpError, parser};
+
+//the terms we use inside of the egraph, currently only supports Symbolic expressions
+//though in theory it can support other data as well.
+//commentary is written under the assumption of sexp
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Term {
