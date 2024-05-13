@@ -8,6 +8,7 @@ use hashbrown::HashMap;
 
 mod id; use id::Id;
 mod util;
+use indexmap::IndexSet;
 use util::pretty_print;
 
 //sexp stuff
@@ -38,7 +39,7 @@ use unionfind::UnionFind;
 pub(crate) type BuildHasher = fxhash::FxBuildHasher;
 
 pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
-pub(crate) type IndexSet<K> = indexmap::IndexSet<K, BuildHasher>;
+
 
 
 
@@ -112,9 +113,7 @@ impl EGraph{
         }
     }
 
-
-
-    // Push a potentially new eclass to the graph
+    // Push a potentially new eclass to the graph, then return Id
     fn push_eclass(&mut self, term:&mut Term) -> Id{
         let id = self.find_eclass(term);
         if id.is_some(){ //term already in the graph
@@ -126,17 +125,77 @@ impl EGraph{
 
         self.memo.insert(term.clone(), id);
         for child in term.args.clone(){ // set parent pointers
-            self.classes[usize::from(child)].parents.push(id);
+            self.classes[usize::from(child)].parents.insert(id);
         }
         self.classes.insert(id, eclass);
         return id;
     }
+
+    //unions 2 eclasses and returns the new canonical Id
+    //returns None if the 2 classes are already in the same class
+    fn union(&mut self, id1: Id, id2: Id) -> Option<Id> {
+        let (id1, id2) = (self.find_root(id1), self.find_root(id2));
+        if id1 == id2{ return None }
+        
+        let id3 = self.unionfind.union(id1,id2); 
+        self.dirty_unions.push(id3); // id3 will need it's parents processed in rebuild!
+
+        let (to_id, from_id) = (id1, id2);
+        let mut from = self.classes.get(&id2).unwrap().clone();
+        let mut to = self.classes.get(&id1).unwrap().clone();
+
+        // we empty out the eclass[from] and put everything in eclass[to]
+        to.nodes.extend(from.nodes);
+        to.parents.extend(from.parents);
+
+        // recanonize all nodes in memo.
+        for t in &mut to.nodes{
+            let tid = self.memo.get(t).unwrap().clone();
+            self.memo.swap_remove(t);
+            self.canonicalize(t);
+            self.memo.insert(t.clone(), tid);
+        }
+
+        self.classes.insert(to_id, to);
+
+        self.classes.swap_remove(&from_id);
+
+        return Some(id3);
+    }
+
+
+
+    // Push a potentially new const eclass to the graph, then return Id
+    fn constant(&mut self, x: String) -> Id{
+        let mut t = Term::new(x);
+        return self.push_eclass(&mut t);
+    }
+
+    //insert a new Sexpr into the Egraph
+    //this does so using recursion and merges already existing terms.
+    fn term(&mut self, f: Sexp) -> Id{
+        let mut term: Term;
+        if let Sexp::List(list) = f { //sexp is operator
+            let op = mstr!(list[0].to_string().trim_matches('"'));
+            term = Term::new(op);
+            for item in &list[1..]{//process the args
+                let id = self.term(item.clone());
+                term.args.push(id);
+            }
+            return self.push_eclass(&mut term);
+        } else { //sexp is leaflet
+            let s = mstr!(f.to_string().trim_matches('"'));
+            return self.constant(s);
+        }
+    }
+
+
 }
 
 #[derive(Clone, Debug)]
 pub struct EClass {
     pub nodes: Vec<Term>, //Nodes part of this Eclass, Sexp = List([symbol, child1, childB])
-    pub parents: Vec<Id>  //Parent Eclasses that point towards this Eclass
+    pub parents: IndexSet<Id>  //Parent Eclasses that point towards this Eclass
 }
 impl EClass {
     fn new(node: Term) -> EClass{
@@ -144,12 +203,13 @@ impl EClass {
         termvec.push(node);
         let res = EClass {
             nodes: termvec,
-            parents: Vec::<Id>::new()
+            parents: IndexSet::<Id>::default()
         };
         return res;
     }
 }
 
+//TODO: empty this defunct code
 fn main() {
     // let path = "src/testsuite/";
     // let filename = "ints/nested_add.txt";
@@ -159,41 +219,63 @@ fn main() {
 
     // print!("{:?}\n", r);
     // pretty_print(&r, 10);
-
 }
 
+
+//run these tests on your local machine
 #[cfg(test)]
 mod tests {
     use super::*; //allows this module to use previous scope
     static PATH: &str = "src/testsuite/";
     static FILENAME: &str = "ints/nested_add.txt";
 
-    #[test] //run this test function to see term conversion
-    fn term_conversion() {
-        let buf = format!("{PATH}{FILENAME}");
-        let sexp: Sexp = parser::parse_file(&buf).unwrap();
-        pretty_print(&sexp, 10);
-
-        let buf = Term::sexpr2term(sexp);
-        print!("{:?}\n", buf);
-    }
-
-
-
-    #[test] //run this test function to see term conversion
+    #[test] //run this test function to see graph construction
     fn egraph_construction() {
         let filepath = format!("{PATH}{FILENAME}");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let term = Term::sexpr2term(sexp);
         let mut g = EGraph::new();
         print!("empty graph: {:?}\n", g);
-        for item in term{
-            g.push_eclass(&mut item.clone());
-        }
+        g.term(sexp);
+
         print!("\nnew graph: ");
         g.print();
     }
 
+    #[test] //run this test function to see adding a new term to a constructed graph
+    fn egraph_editing() {
+        let filepath = format!("{PATH}ints/mult.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.term(sexp);
+        print!("\nnew egraph: ");
+        g.print();
+
+        let altsexp: Sexp = parser::parse_str("(<< a 1)").unwrap();
+
+        print!("\nextra term: {:?}\n", altsexp);
+        
+        g.term(altsexp);
+
+        print!("\nedited graph: ");
+        g.print();
+    }
+
+    #[test] //run this test function to see adding a new term to a constructed graph
+    fn egraph_union() {
+        let filepath = format!("{PATH}ints/mult.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.term(sexp);
+        let altsexp: Sexp = parser::parse_str("(<< a 1)").unwrap();
+        g.term(altsexp);
+
+        print!("\nedited graph: ");
+        g.print();
+
+        print!("\nunioning eclass 3 and 4...\n\n");
+        g.union(id!(2), id!(4));
+        g.print();
+    }
 }
 
 

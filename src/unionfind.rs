@@ -2,7 +2,8 @@ use crate::Id;
 use std::fmt::Debug;
 use std::vec::Vec;
 
-
+//mostly originates from the egg library
+//required for the Egraphs themselves
 
 #[derive(Debug, Clone, Default)]
 pub struct UnionFind {
