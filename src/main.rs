@@ -8,7 +8,7 @@ use hashbrown::HashMap;
 
 mod id; use id::Id;
 mod util;
-use indexmap::IndexSet;
+
 use util::pretty_print;
 
 //sexp stuff
@@ -34,23 +34,80 @@ pub(crate) type BuildHasher = fxhash::FxBuildHasher;
 pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
 
 
-use indexmap::set::Union;
-struct PatVar{
-    id: String
+use indexmap::{set::Union};
+
+// #[derive(Eq, Hash, PartialEq, Default)]
+// struct PatVar{
+//     id: String
+// }
+// struct PatTerm<'a>{
+//     head:String,
+//     args:Vec< Union<'a, PatTerm<'a>, PatVar> >
+// }
+
+#[derive(Eq, Hash, PartialEq)]
+enum Pattern {
+    PatVar(String),
+    PatTerm(String, Vec<Box<Pattern>>),
 }
 
-struct PatTerm<'a>{
-    head:String,
-    args:Vec< Union<'a, PatTerm<'a>, PatVar> >
+fn merge_consistent(dicts: Vec<IndexMap<Pattern, Term>>) -> Option<IndexMap<Pattern, Term>>{
+    let mut newd: IndexMap<Pattern, Term> = IndexMap::<Pattern, Term>::default();
+
+    for dict in dicts {
+        for (k,v) in dict{
+            if newd.contains_key(&k){
+                if *newd.get(&k).unwrap() != v{
+                    return None;
+                }
+            }else{
+                newd.insert(k, v);
+            }
+        }
+    }
+    return Some(newd);
 }
 
-struct Pattern<'a>(Union<'a, PatTerm<'a>,PatVar>);
+// fn match_pattern(t:Term,  p:Pattern) -> Option<IndexMap<Pattern, Term>> {
+//     if let Pattern::PatVar(s) = p {
+//         let mut m = IndexMap::<Pattern, Term>::default();
+//         m.insert(Pattern::PatVar(s), t);
+//         return m;
+//     }
+//     else if let Pattern::PatTerm(s, next) = p {
+//         if t.head != s || t.args.len() != next.len(){
+//             return None;
+//         }
+//         else {
+//             let mut temp = Vec::<IndexMap<Pattern, Term>>::new();
+//             for (t1,p1) in t.args.iter().zip(next){
+//                 match_pattern(*t1,*p1);
+//             }
+    
+//             // let v = [ match_pattern(t1,p1) for (t1,p1) in zip(t.args, p.args)];
+    
+//             return merge_consistent( temp );
+//         }
+//     }
+
+//     return None;
+// }
 
 
 
-
-
-
+struct Rule {
+    lhs: Pattern,
+    rhs: Pattern
+}
+// impl Rule {
+//     fn new(l: Term, r: Term) -> Rule{
+//         let res = Rule {
+//             lhs: l,
+//             rhs: r
+//         };
+//         return res;
+//     }
+// }
 
 //TODO: empty this defunct code
 fn main() {
@@ -73,51 +130,24 @@ mod tests {
     static FILENAME: &str = "ints/nested_add.txt";
 
     #[test] //run this test function to see graph construction
-    fn egraph_construction() {
-        let filepath = format!("{PATH}{FILENAME}");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        print!("empty graph: {:?}\n", g);
-        g.term(sexp);
-
-        print!("\nnew graph: ");
-        g.print();
+    fn patt_matching_test2() {
+        // let r = Rule {lhs: , rhs: };
     }
 
-    #[test] //run this test function to see adding a new term to a constructed graph
-    fn egraph_editing() {
-        let filepath = format!("{PATH}ints/mult.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.term(sexp);
-        print!("\nnew egraph: ");
-        g.print();
 
-        let altsexp: Sexp = parser::parse_str("(<< a 1)").unwrap();
+    #[test] //run this test function to see graph construction
+    fn patt_matching_test() {
+        struct Point {
+            x: i32,
+            y: i32,
+        }
+        let p = Point { x: 0, y: 7 };
 
-        print!("\nextra term: {:?}\n", altsexp);
-        
-        g.term(altsexp);
-
-        print!("\nedited graph: ");
-        g.print();
-    }
-
-    #[test] //run this test function to see adding a new term to a constructed graph
-    fn egraph_union() {
-        let filepath = format!("{PATH}ints/mult.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.term(sexp);
-        let altsexp: Sexp = parser::parse_str("(<< a 1)").unwrap();
-        g.term(altsexp);
-
-        print!("\nedited graph: ");
-        g.print();
-
-        print!("\nunioning eclass 3 and 4...\n\n");
-        g.union(itoid!(2), itoid!(4));
-        g.print();
+        match p {
+            Point { x, y } if x == y => println!("On the x axis at {x}"),
+            Point { x: 0, y } => println!("On the y axis at {y}"),
+            Point {x, y} =>println!("at {x} {y}")
+        }
     }
 }
 
