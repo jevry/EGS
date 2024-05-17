@@ -1,22 +1,27 @@
+use std::clone;
+use std::thread::yield_now;
+use std::vec;
+
+
 use symbolic_expressions::{Sexp, SexpError, parser};
-use indexmap::IndexSet;
 use crate::Id;//the structure
 use crate::itoid;//the macro
 use crate::Term;
 use crate::UnionFind;
 use crate::EClass;
 use crate::mstr;
+use crate::Pattern;
+use indexmap::{map::Values, IndexSet};
 
 
-
-//we use hasmap instead of indexmap because indexmaps are more deterministic and easyer to debug
+//we use hasmap instead of indexmap because indexmaps are more deterministic and easier to debug
 pub(crate) type BuildHasher = fxhash::FxBuildHasher;
 pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
 
 
-//   `memo` to map `Term` to their equivalence class
+//   `memo` to map `Term` to their equivalence class ID
 //`classes` to map equivalence class `Id` to the `EClass`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EGraph{
     unionfind:    UnionFind,
     memo:         IndexMap<Term, Id>,  //memory to store future term IDs
@@ -48,6 +53,147 @@ impl EGraph{
         print!("dirty_unions {:?}\n", self.dirty_unions);
     }
 
+    //return a eclass of a given id
+    pub fn get_class(&self, id: Id) -> Option<&EClass>{
+        return self.classes.get(&id);
+    }
+
+
+}
+
+
+/*
+impl EGraph{
+    fn ematchlist(self, t:Vec<Box<Pattern>> , v:Vec<Id>, sub: IndexMap<Pattern, Id>) -> IndexMap<Pattern, Id>{
+        //Channel() do c
+            if t.len() == 0{
+                return sub;
+            }else{
+                let it = self.ematch(*t[0], v[0], sub);
+                t.remove(0);
+                v.remove(0);
+                for sub1 in it{
+                    let res = self.ematchlist(t, v, sub1);
+                    return res;
+
+                }
+            }
+        //end
+        return sub;
+    }
+
+    // sub should be a map from pattern variables to Id
+    fn ematch(&self, t:Pattern, v:Id, sub: IndexMap<Pattern, Id>) -> impl Iterator<Item = Pattern, Id> {
+        let v_root = self.find_root(v);
+        if let Pattern::PatVar(s) = t {
+        //Channel() do c
+            if sub.contains_key(&t){
+                let temp = sub.get(&t).unwrap();
+                if self.find_root(*temp) == v_root{
+                    return sub;
+                }
+            } else {
+                //return Base.ImmutableDict(sub, t => v_root); TODO
+            }
+        }
+        else if let Pattern::PatTerm(t_head, t_args) = t {
+        //Channel() do c
+            let temp = *self.classes.get(&v_root).unwrap();
+            for n in temp.nodes{
+                if n.head == t_head{
+                    for sub1 in self.ematchlist(t_args , n.args , sub){
+                        return sub1;
+                    }
+                }
+            }
+        }
+        return sub.values();
+    }
+    
+
+}*/
+
+
+//inefficient but simple pattern matching algorithm
+impl EGraph{
+    fn match_pattern(&mut self ,e:EClass,  p:&Pattern, sub: &mut IndexMap<Term, Id>) -> Option<IndexMap<Pattern, Term>> {
+        if let Pattern::PatVar(s) = p {
+            let mut m = IndexMap::<Pattern, Term>::default();
+
+            for t in e.nodes{
+                m.insert(Pattern::PatVar(s.clone()), t.clone()); //probably 1
+                let id = self.find_eclass(&mut t.clone()).unwrap();
+                print!("match pattern putting into buf: {:?}\n", t.clone());
+                sub.insert(t.clone(), id);
+            }
+            return Some(m);
+        }
+        else if let Pattern::PatTerm(p_head, p_args) = p {
+            for t in e.nodes{ //for each node in the eclass
+                if t.head != *p_head || t.args.len() != p_args.len(){ //no match
+                    continue;
+                }
+                else { //heads the same, check kids
+                    let mut res = Vec::<IndexMap<Pattern, Term>>::new();
+                    for (t1,p1) in t.args.iter().zip(p_args){ //for each arg in the term
+                        let c = self.get_class(*t1).unwrap(); //derive eclass from t.arg
+                        let d = self.match_pattern(c.clone(),p1, sub);
+                        if d.is_some(){ //if we had a result
+                            res.push(d.unwrap());
+                        }
+                    }
+                    return EGraph::merge_consistent( res );
+                }
+            }
+        }
+        return None;
+    }
+
+    fn merge_consistent(dicts: Vec<IndexMap<Pattern, Term>>) -> Option<IndexMap<Pattern, Term>>{
+        let mut newd: IndexMap<Pattern, Term> = IndexMap::<Pattern, Term>::default();
+    
+        for dict in dicts {
+            for (k,v) in dict{
+                if newd.contains_key(&k){
+                    if *newd.get(&k).unwrap() != v{
+                        return None;
+                    }
+                }else{
+                    newd.insert(k, v);
+                }
+            }
+        }
+        return Some(newd);
+    }
+
+
+
+    //sub maps a VAR symbol to an Identifier in the EGraph
+    //this means that the VAR symbol comes from pattern and the ID from the EGraph
+    fn instantiate(&mut self, p: Pattern, sub: &IndexMap<Term, Id>) -> Option<Id>{
+        if let Pattern::PatVar(s) = p { //adding a patvar to the EG
+            print!("pattern head = {}\n", mstr!(s.clone()));
+            print!("instantiate received {:?}\n", sub);
+            let t = sub.get(&Term::new(s)); //get the appropriate ID
+            if t.is_none(){print!("PANIC!!!\n")}
+            return Some(*t.unwrap()); //return the appropriate ID
+
+        } else if let Pattern::PatTerm(p_head, p_args) = p {
+            let mut t = Term::new(p_head); //get term head
+            for a in p_args { //get terms in p_args
+
+                //recursive call, return val is the ID of the Enode the call added to the EGraph
+                t.args.push(self.instantiate(*a, &sub).unwrap());//push that ID to our term
+            }
+            return Some(self.push_eclass(&mut t.clone())); //push term into EGraph
+        }
+        return None; //instantiate breaks
+    }
+}
+
+
+
+impl EGraph{
     //returns the canonical id
     pub fn find_root(&mut self, id:Id)-> Id{
         return self.unionfind.find_mut(id);
@@ -159,11 +305,45 @@ impl EGraph{
     }
 }
 
+struct Rule {
+    lhs: Pattern,
+    rhs: Pattern
+}
+
+
+impl EGraph {
+    fn rewrite(&mut self, r:Rule){
+        let mut matches = Vec::<(Id, Id)>::new();
+
+        let mut bufdict = IndexMap::<Term, Id>::default();
+        let t = r.lhs.clone();
+        for (n, cls) in self.classes.clone(){
+            let temp =  self.match_pattern(cls, &t, &mut bufdict);
+            if temp.is_some() {
+                    print!("found match {:?} for id {:?}\n", temp, n);
+                    for sub in temp.unwrap(){
+                        print!("insering the term...\n");
+
+                        // matches.push(( self.instantiate(r.lhs ,sub), instantiate(r.rhs ,sub) )); 
+                    }
+
+
+
+                    self.instantiate(t.clone(), &bufdict);
+                    print!("success!\n\n")
+
+            }
+        }
+        self.print();
+    }
+}
 
 
 //run these tests on your local machine
 #[cfg(test)]
 mod tests {
+    use symbol_table::Symbol;
+
     use super::*; //allows this module to use previous scope
     static PATH: &str = "src/testsuite/";
     static FILENAME: &str = "ints/nested_add.txt";
@@ -214,5 +394,45 @@ mod tests {
         print!("\nunioning eclass 3 and 4...\n\n");
         g.union(itoid!(2), itoid!(4));
         g.print();
+    }
+
+    // pub enum Pattern {
+    //     PatVar(String),
+    //     PatTerm(String, Vec<Box<Pattern>>),
+    // }
+
+
+    #[test] //to test ematching
+    fn egraph_matching() {
+        let filepath = format!("{PATH}ints/mult.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.term(sexp);
+        print!("\nnew egraph: ");
+        g.print();
+
+        let mut vec = Vec::<Box<Pattern>>::new();
+        let patv = Pattern::PatVar(mstr!("P_a"));
+        vec.push(Box::<Pattern>::new(patv));
+        let patv = Pattern::PatVar(mstr!("P_b"));
+        vec.push(Box::<Pattern>::new(patv));
+        let patt = Pattern::PatTerm(mstr!("*"), vec);
+        print!("{:?}\n", patt);
+
+        let mut vec2 = Vec::<Box<Pattern>>::new();
+        let patv2 = Pattern::PatVar(mstr!("P_a"));
+        vec2.push(Box::<Pattern>::new(patv2));
+        let patv2 = Pattern::PatTerm(mstr!("P_b"), Vec::<Box<Pattern>>::new());
+        vec2.push(Box::<Pattern>::new(patv2));
+        let patt2 = Pattern::PatTerm(mstr!("*"), vec2);
+        print!("{:?}\n", patt2);
+
+        let n = g.get_class(itoid!(2)).unwrap();
+        let mut dict = IndexMap::<Term, Id>::default();
+        print!("\nres = {:?}\n", g.match_pattern(n.clone(), &patt.clone(), &mut dict));
+        print!("var map = {:?}\n\n", dict);
+
+        let r = Rule {lhs: patt, rhs:patt2}; 
+        g.rewrite(r);
     }
 }

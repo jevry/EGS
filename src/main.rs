@@ -34,80 +34,16 @@ pub(crate) type BuildHasher = fxhash::FxBuildHasher;
 pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
 
 
-use indexmap::{set::Union};
+use indexmap::{set::Union, map::Values};
 
-// #[derive(Eq, Hash, PartialEq, Default)]
-// struct PatVar{
-//     id: String
-// }
-// struct PatTerm<'a>{
-//     head:String,
-//     args:Vec< Union<'a, PatTerm<'a>, PatVar> >
-// }
 
-#[derive(Eq, Hash, PartialEq)]
-enum Pattern {
+#[derive(Eq, Hash, PartialEq, Clone, Debug)]
+pub enum Pattern {
     PatVar(String),
     PatTerm(String, Vec<Box<Pattern>>),
 }
 
-fn merge_consistent(dicts: Vec<IndexMap<Pattern, Term>>) -> Option<IndexMap<Pattern, Term>>{
-    let mut newd: IndexMap<Pattern, Term> = IndexMap::<Pattern, Term>::default();
 
-    for dict in dicts {
-        for (k,v) in dict{
-            if newd.contains_key(&k){
-                if *newd.get(&k).unwrap() != v{
-                    return None;
-                }
-            }else{
-                newd.insert(k, v);
-            }
-        }
-    }
-    return Some(newd);
-}
-
-// fn match_pattern(t:Term,  p:Pattern) -> Option<IndexMap<Pattern, Term>> {
-//     if let Pattern::PatVar(s) = p {
-//         let mut m = IndexMap::<Pattern, Term>::default();
-//         m.insert(Pattern::PatVar(s), t);
-//         return m;
-//     }
-//     else if let Pattern::PatTerm(s, next) = p {
-//         if t.head != s || t.args.len() != next.len(){
-//             return None;
-//         }
-//         else {
-//             let mut temp = Vec::<IndexMap<Pattern, Term>>::new();
-//             for (t1,p1) in t.args.iter().zip(next){
-//                 match_pattern(*t1,*p1);
-//             }
-    
-//             // let v = [ match_pattern(t1,p1) for (t1,p1) in zip(t.args, p.args)];
-    
-//             return merge_consistent( temp );
-//         }
-//     }
-
-//     return None;
-// }
-
-
-
-struct Rule {
-    lhs: Pattern,
-    rhs: Pattern
-}
-// impl Rule {
-//     fn new(l: Term, r: Term) -> Rule{
-//         let res = Rule {
-//             lhs: l,
-//             rhs: r
-//         };
-//         return res;
-//     }
-// }
 
 //TODO: empty this defunct code
 fn main() {
@@ -146,7 +82,7 @@ mod tests {
         match p {
             Point { x, y } if x == y => println!("On the x axis at {x}"),
             Point { x: 0, y } => println!("On the y axis at {y}"),
-            Point {x, y} =>println!("at {x} {y}")
+            Point { x, y} =>println!("at {x} {y}")
         }
     }
 }
