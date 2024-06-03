@@ -7,7 +7,7 @@ macro_rules! mstr { //simplify String::from function
         $( String::from($x) )+
     };
 }
-pub(crate) use mstr;
+
 
 
 //print out a Sexpr in a pretty manner
@@ -17,7 +17,7 @@ pub fn pretty_print(sexp: &Sexp, width: usize){
     print!("\n{}\n\n", buf);
 }
 
-//formats the string
+//convert sexp into a formatted string and store it in buf
 pub fn format_pretty_string(buf: &mut String, sexp: &Sexp, width: usize, level: usize) -> std::fmt::Result {
     use std::fmt::Write;
     if let Sexp::List(list) = sexp {

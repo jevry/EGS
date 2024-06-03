@@ -12,10 +12,10 @@ impl From<Id> for usize { //cast Id to usize, used as usize::from(n)
         return id.0 as usize;
     }
 }
-#[macro_export]
-macro_rules! itoid { //simplify Id::from function
+#[macro_export]//export macro
+macro_rules! itoid { // Int_TO_ID; simplify Id::from function
     ( $($x:expr)? ) =>{
         $( Id::from($x) )+
     };
 }
-pub(crate) use itoid;
+// pub(crate) use itoid;

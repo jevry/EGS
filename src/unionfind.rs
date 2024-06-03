@@ -42,8 +42,6 @@ impl UnionFind {
     }
 
     // finds the canonical ID, then sets all nodes in the set to point directly towards the canonical ID
-    // for example in UF[0,3,0,2,4] find(1) loops from id==1 to id==3 to id==2 to id==0
-    // then UF is set to [0,0,0,0,4]
     pub fn find_mut(&mut self, mut current: Id) -> Id {
         while current != self.parent(current) {
             let grandparent = self.parent(self.parent(current));
@@ -53,7 +51,7 @@ impl UnionFind {
         return current;
     }
 
-    /// unions 2 nodes
+    /// unions 2 nodes and returns root(id1)
     pub fn union(&mut self, id1: Id, id2: Id) -> Id {
         let root1 = self.find(id1);
         let root2 = self.find(id2);
@@ -69,6 +67,7 @@ impl UnionFind {
 }
 
 
+//test functions
 #[cfg(test)]
 mod tests {
     use super::*; //allows this module to use previous scope

@@ -15,8 +15,8 @@ use util::pretty_print;
 use symbolic_expressions::{Sexp, SexpError, parser};
 
 
-mod terms;
-use terms::Term;
+mod enode;
+use enode::Enode;
 
 mod unionfind;
 use unionfind::UnionFind;
@@ -27,8 +27,11 @@ use eclass::EClass;
 mod egraph;
 use egraph::EGraph;
 
+mod pattern;
 
-//we use hasmap instead of indexmap because indexmaps are more deterministic
+
+//we use indexmap instead of hashmap because indexmaps are more deterministic in their ordering
+//but both should work
 pub(crate) type BuildHasher = fxhash::FxBuildHasher;
 
 pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
@@ -36,12 +39,6 @@ pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
 
 use indexmap::{set::Union, map::Values};
 
-
-#[derive(Eq, Hash, PartialEq, Clone, Debug)]
-pub enum Pattern {
-    PatVar(String),
-    PatTerm(String, Vec<Box<Pattern>>),
-}
 
 
 
