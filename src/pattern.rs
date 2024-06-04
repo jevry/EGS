@@ -1,7 +1,10 @@
-use symbolic_expressions::{Sexp, SexpError, parser};
-use std::fs::read_to_string;
-use crate::mstr;
+//pattern
 //used for pattern matching
+
+use std::fs::read_to_string;
+use symbolic_expressions::parser::parse_str;
+use symbolic_expressions::{Sexp, SexpError};
+use crate::mstr;
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub enum Pattern {
@@ -52,14 +55,31 @@ impl Rule{
     }
 }
 
+
+pub fn read_ruleset(filepath: String) -> Vec::<Rule> {
+    let mut res = Vec::<Rule>::new();
+    for line in read_to_string(filepath).unwrap().lines() {
+        if line.len() == 0{continue;}
+        let parts = line.split("->").collect::<Vec<&str>>();
+        if parts.len() > 1{
+            if let Ok(lhs) = parse_str(parts[0]){
+                if let Ok(rhs) = parse_str(parts[1]){
+                    let r = Rule::new_rule(lhs, rhs).unwrap();
+                    res.push(r);
+                }
+            }
+        }
+    }
+    return res;
+}
+
 //run these tests on your local machine
 #[cfg(test)]
 mod tests {
-    use symbol_table::Symbol;
-    use symbolic_expressions::parser::parse_str;
-    use crate::pattern::Rule;
-
     use super::*; //allows this module to use previous scope
+    use std::fs::read_to_string;
+    use symbolic_expressions::parser::parse_str;
+
     static PATH: &str = "src/rulesets/";
     static FILENAME: &str = "patternB.txt";
 

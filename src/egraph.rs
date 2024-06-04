@@ -1,8 +1,10 @@
 
 
-use core::f64;
+use std::collections::btree_map::Range;
+use std::{clone, vec};
 
 use daggy::petgraph::algo::matching;
+use indexmap::{indexset, set};
 use symbolic_expressions::{Sexp, SexpError, parser};
 use crate::{Id, itoid};
 use crate::Enode;
@@ -11,9 +13,6 @@ use crate::EClass;
 use crate::mstr;
 use crate::pattern::{Pattern, Rule};
 use indexmap::{map::Values, IndexSet};
-
-// use petgraph::prelude::Graph;
-// use petgraph::dot::Dot;
 
 //we use hasmap instead of indexmap because indexmaps are more deterministic and easier to debug
 pub(crate) type BuildHasher = fxhash::FxBuildHasher;
@@ -47,33 +46,33 @@ impl EGraph{
             print!("    {:?} \n", t);
         }
         print!("\nclasses\n");
-        for t in self.classes.clone(){
-            print!("    {:?} \n", t);
+        for (i, c) in self.classes.clone(){
+            print!("    eclass: {:?} \n", i);
+            for t in c.nodes{
+                print!("        {:?} \n", t);
+            }
+            print!("        parents: {:?} \n\n", c.parents);
         }
         print!("dirty_unions {:?}\n", self.dirty_unions);
     }
-
-
-    // pub fn draw_egraph(&self){
-    //     let mut graph = Graph::<&str, u32>::new();
-    // }
-
-    // pub fn draw_recursive(&self, g: &Graph::<&str, u32>){
-    // }
 
     //return a eclass of a given id
     pub fn get_eclass(&self, id: Id) -> Option<&EClass>{
         return self.classes.get(&id);
     }
 
-
 }
 
 //basic egraph manipulation
 impl EGraph{
-    //returns the canonical id
-    pub fn find(&mut self, id:Id)-> Id{
+    //returns the canonical id and updates it for the given id
+    pub fn find_mut(&mut self, id:Id)-> Id{
         return self.unionfind.find_mut(id);
+    }
+
+    //returns the canonical id
+    pub fn find(self, id:Id)-> Id{
+        return self.unionfind.find(id);
     }
 
     // Checks if 2 given terms are in the same class.
@@ -85,26 +84,26 @@ impl EGraph{
     }
 
     // canonicalizes the args of a given term, then returns it
-    pub fn canonicalize_args(&mut self, term: &mut Enode){
+    pub fn canonicalize_args(&mut self, term: &mut Enode) -> Enode{
         let mut new = Vec::<Id>::new();
         for i in term.args.clone(){
             new.push(self.unionfind.find_mut(i));
         }
         term.args = new;
+        return term.clone();
     }
 
     //finds the corresponding Eclass Id of a given enode
     //returns None if it cant find the Eclass
     pub fn find_eclass(&mut self, enode: &mut Enode) -> Option<Id>{
-        self.canonicalize_args(enode);
-        let pair = self.memo.get_key_value(enode);
-        if pair.is_none(){
-            return None;
+        if let Some(id) = self.memo.get(enode){
+            return Some(self.find_mut(*id));
         }
-        else{
-            let (_, id) = pair.unwrap();
-            return Some(self.find(*id));
+        let t = self.canonicalize_args(enode);
+        if let Some(id) = self.memo.get(&t){
+            return Some(self.find_mut(*id));
         }
+        return None;
     }
 
     // Push a potentially new eclass to the graph, then return Id
@@ -121,7 +120,7 @@ impl EGraph{
 
         for child in enode.args.clone(){ // set parent pointers
             let idx = self.classes.get_index_of(&child).unwrap();
-            self.classes[idx].parents.insert(id);
+            self.classes[idx].parents.push((enode.clone(), id));
         }
         self.classes.insert(id, eclass);
         return id;
@@ -130,7 +129,7 @@ impl EGraph{
     //unions 2 eclasses and returns the new canonical Id
     //returns None if the 2 classes are already in the same class
     pub fn union(&mut self, id1: Id, id2: Id) -> Option<Id> {
-        let (id1, id2) = (self.find(id1), self.find(id2));
+        let (id1, id2) = (self.find_mut(id1), self.find_mut(id2));
         if id1 == id2{ return None }
         
         let id3 = self.unionfind.union(id1,id2); 
@@ -143,20 +142,72 @@ impl EGraph{
         // move nodes and parents from eclass[`from`] to eclass[`to`]
         to.nodes.extend(from.nodes);
         to.parents.extend(from.parents);
-
+        
+        
+        let mut temp = to.nodes.clone();
+        to.nodes = Vec::<Enode>::new();
         // recanonize all nodes in memo.
-        for t in &mut to.nodes{
+        for t in &mut temp{
             let tid = self.memo.get(t).unwrap().clone();
             self.memo.swap_remove(t);
-            self.canonicalize_args(t);
+            let t = self.canonicalize_args(t);
             self.memo.insert(t.clone(), tid);
+            to.nodes.push(t);
         }
 
         self.classes.insert(to_id, to); //replace old `to` with new `to`
         self.classes.swap_remove(&from_id); //remove old `from`
-
         return Some(id3);
     }
+
+
+    fn repair(&mut self, id:Id){
+        //clone the entire eclass, extremely inefficient but rust refuses to play nice otherwise
+        let mut new_cls = self.classes.get(&id).unwrap().clone();
+        self.classes.swap_remove(&id);
+        let parents = new_cls.parents.clone();
+        new_cls.parents = Vec::<(Enode, Id)>::new(); //clear parents
+
+        //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
+        for (mut t, t_id) in parents{
+            self.memo.swap_remove(&t); // the parent should be updated to use the updated class id
+            new_cls.parents.push((self.canonicalize_args(&mut t), t_id)); //canonicalize
+            self.memo.insert(t.clone(), t_id); // replace in hash cons  
+        }
+        self.classes.insert(id, new_cls);
+
+        // now we need to discover possible new congruence equalities in the parent nodes.
+        // we do this by building up a parent hash to see if any new terms are generated.
+        // new_parents = Dict()
+        // for (t,t_id) in cls.parents {
+        //     canonicalize!(e,t) // canonicalize. Unnecessary by the above?
+        //     if haskey(new_parents, t){
+        //         union!(e, t_id, new_parents[t])
+        //     }
+
+        //     new_parents[t] = find_root!(e, t_id)
+        // }
+
+        // e.classes[id].parents = [ (p,id) for (p,id) in new_parents]
+    }
+
+    //calls repair on "duty unions"
+    //which first canonicalizes some nodes in memo
+    //(NOT IMPLEMENTED:) and then checks for additional congruences that might have formed
+    fn rebuild(&mut self){
+    while self.dirty_unions.len() > 0{
+        let mut todo = IndexSet::<Id>::new();
+        for i in self.dirty_unions.clone(){
+            todo.insert(self.find_mut(i));
+        }
+        self.dirty_unions = Vec::<Id>::new();
+        for id in todo{
+            self.repair(id)
+        }
+    }
+}
+
+
 
     // Push a potentially new leaflet eclass to the graph, then return Id
     pub fn leaflet(&mut self, x: String) -> Id{
@@ -184,59 +235,9 @@ impl EGraph{
     }
 }
 
-/*
-impl EGraph{
-    fn ematchlist(self, t:Vec<Box<Pattern>> , v:Vec<Id>, sub: IndexMap<Pattern, Id>) -> IndexMap<Pattern, Id>{
-        //Channel() do c
-            if t.len() == 0{
-                return sub;
-            }else{
-                let it = self.ematch(*t[0], v[0], sub);
-                t.remove(0);
-                v.remove(0);
-                for sub1 in it{
-                    let res = self.ematchlist(t, v, sub1);
-                    return res;
-
-                }
-            }
-        //end
-        return sub;
-    }
-
-    // sub should be a map from pattern variables to Id
-    fn ematch(&self, t:Pattern, v:Id, sub: IndexMap<Pattern, Id>) -> impl Iterator<Item = Pattern, Id> {
-        let v_root = self.find_root(v);
-        if let Pattern::PatVar(s) = t {
-        //Channel() do c
-            if sub.contains_key(&t){
-                let temp = sub.get(&t).unwrap();
-                if self.find_root(*temp) == v_root{
-                    return sub;
-                }
-            } else {
-                //return Base.ImmutableDict(sub, t => v_root); TODO
-            }
-        }
-        else if let Pattern::PatTerm(t_head, t_args) = t {
-        //Channel() do c
-            let temp = *self.classes.get(&v_root).unwrap();
-            for n in temp.nodes{
-                if n.head == t_head{
-                    for sub1 in self.ematchlist(t_args , n.args , sub){
-                        return sub1;
-                    }
-                }
-            }
-        }
-        return sub.values();
-    }
-    
-
-}*/
 
 
-//inefficient but simple pattern matching algorithm
+//inefficient but relatively simple pattern matching algorithm
 //if return None, no match was found
 //if return Some{ {} }, one or more matches were found but the provided pattern has no variables
 //if return Some{d} where d is a non-empty dict, one or more matches were found
@@ -244,10 +245,11 @@ impl EGraph{
     fn match_pattern(&mut self ,e:EClass,  p:&Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
             let mut m = IndexMap::<Pattern, Enode>::default();
-            for t in e.nodes{
+            for t in e.nodes.clone(){
                 m.insert(Pattern::PatVar(s.clone()), t.clone()); //probably 1
-                let id = self.find_eclass(&mut t.clone()).unwrap();
-                sub.insert(t.clone(), id);
+                if let Some(id) = self.find_eclass(&mut t.clone()) {
+                    sub.insert(t, id);
+                } else {panic!("failed to find eclass {:?}\n", t)}
             }
             return Some(m);
         }
@@ -260,8 +262,9 @@ impl EGraph{
                     let mut res = Vec::<IndexMap<Pattern, Enode>>::new();
                     let mut matching_children = 0;
 
-                    for (t1,p1) in t.args.iter().zip(p_args){ //for each arg in the term
-                        let c = self.get_eclass(*t1).unwrap(); //derive eclass from t.arg
+                    for (t1, p1) in t.args.iter().zip(p_args){ //for each arg in the term
+                        let new = self.find_mut(*t1);
+                        let c = self.get_eclass(new).unwrap(); //derive eclass from t.arg
                         let d = self.match_pattern(c.clone(),p1, sub);
                         if d.is_some(){ //if we had a result, push the resulting dict onto res, d can be empty
                             res.push(d.unwrap());
@@ -320,7 +323,7 @@ impl EGraph{
     //matches the given rule.lhs once with each eclass
     //inserts rule.rhs whereever a match is found
     //returns the number of times a rule is succesfully applied to an eclass
-    fn rewrite_lhs_to_rhs(&mut self, r:Rule) -> i32{
+    pub fn rewrite_lhs_to_rhs(&mut self, r:Rule) -> i32{
         let mut bufdict = IndexMap::<Enode, Id>::default();
         let mut translator = IndexMap::<Pattern, Enode>::default();
         let lhs = r.lhs.clone();
@@ -342,7 +345,7 @@ impl EGraph{
     }
 
     //applies all rules in a passed ruleset to the egraph
-    fn rewrite_ruleset(&mut self, rs:Vec<Rule>)-> i32{
+    pub fn rewrite_ruleset(&mut self, rs:Vec<Rule>)-> i32{
         let mut edits = 0;
         for r in rs{
             edits += self.rewrite_lhs_to_rhs(r);
@@ -358,7 +361,7 @@ impl EGraph{
 mod tests {
     use symbol_table::Symbol;
     use symbolic_expressions::parser::parse_str;
-
+    use crate::pattern::read_ruleset;
     use crate::pattern::new_pattern;
 
     use super::*; //allows this module to use previous scope
@@ -376,6 +379,8 @@ mod tests {
         print!("\nnew graph: ");
         g.print();
     }
+
+
 
     #[test] //run this test function to see adding a new term to a constructed graph
     fn egraph_editing() {
@@ -452,7 +457,7 @@ mod tests {
     }
 
     #[test] //to test rewriting a graph multiple times
-    fn egraph_mass_rewrite() {
+    pub fn egraph_mass_rewrite() {
         let filepath = format!("{PATH}ints/example.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
@@ -460,32 +465,14 @@ mod tests {
         print!("\nnew egraph: ");
         g.print();
 
-        let sexp1 = parse_str("(* P_x 2)").unwrap();
-        let sexp2 = parse_str("(<< P_x 1)").unwrap();
-        let r1 = Rule::new_rule(sexp1, sexp2).unwrap();
 
-        let sexp1 = parse_str("(* P_x P_y)").unwrap();
-        let sexp2 = parse_str("(* P_y P_x)").unwrap();
-        let r2 = Rule::new_rule(sexp1, sexp2).unwrap();
-
-        let sexp1 = parse_str("(* (P_x P_y) P_z)").unwrap();
-        let sexp2 = parse_str("(* P_x (P_y P_z))").unwrap();
-        let r3 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
-        let r4 = Rule::new_rule(sexp2, sexp1).unwrap();
-
-        let sexp1 = parse_str("(/ P_c P_c)").unwrap();
-        let sexp2 = parse_str("1").unwrap();
-        let r5 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
-
-        let sexp1 = parse_str("(/ (* P_x P_y) P_z)").unwrap();
-        let sexp2 = parse_str("(* P_x (/ P_y P_z))").unwrap();
-        let r6 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
-
-        let ruleset = [r1, r2, r3, r4, r5, r6].to_vec();
+        let ruleset = read_ruleset(format!("src/rulesets/rulesetA.txt"));
         let edits = g.rewrite_ruleset(ruleset.clone());
         print!("first pass edits: {}\n", edits);
+        g.rebuild();
         let edits = g.rewrite_ruleset(ruleset.clone());
         print!("second pass edits: {}\n", edits);
+        g.rebuild();
         let edits = g.rewrite_ruleset(ruleset);
         print!("third pass edits made: {}\n", edits);
         g.print();

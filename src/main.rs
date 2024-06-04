@@ -2,17 +2,16 @@
 //note: this code uses "return val;" instead of "val" to make it clearer what is happening
 
 
-use std::{default, env::Vars, fmt::Debug, string};
-use daggy::{petgraph::adj::List, Parents};
+
 use hashbrown::HashMap;
 
 mod id; use id::Id;
 mod util;
 
+
 use util::pretty_print;
 
-//sexp stuff
-use symbolic_expressions::{Sexp, SexpError, parser};
+
 
 
 mod enode;
@@ -30,28 +29,17 @@ use egraph::EGraph;
 mod pattern;
 
 
-//we use indexmap instead of hashmap because indexmaps are more deterministic in their ordering
-//but both should work
-pub(crate) type BuildHasher = fxhash::FxBuildHasher;
-
-pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
 
 
-use indexmap::{set::Union, map::Values};
 
+
+use symbolic_expressions::parser::parse_str;
+use pattern::Rule;
 
 
 
 //TODO: empty this defunct code
 fn main() {
-    // let path = "src/testsuite/";
-    // let filename = "ints/nested_add.txt";
-
-    // let buf = format!("{path}{filename}");
-    // let r: Sexp = parser::parse_file(&buf).unwrap();
-
-    // print!("{:?}\n", r);
-    // pretty_print(&r, 10);
 }
 
 
@@ -59,29 +47,49 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*; //allows this module to use previous scope
+    use symbolic_expressions::{Sexp, parser};
     static PATH: &str = "src/testsuite/";
-    static FILENAME: &str = "ints/nested_add.txt";
 
-    #[test] //run this test function to see graph construction
-    fn patt_matching_test2() {
-        // let r = Rule {lhs: , rhs: };
+    #[test] //to test rewriting a graph multiple times
+    pub fn egraph_mass_rewrite() {
+        let filepath = format!("{PATH}ints/example.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.insert_sexpr(sexp);
+        print!("\nnew egraph: ");
+        g.print();
+
+        let sexp1 = parse_str("(* P_x 2)").unwrap();
+        let sexp2 = parse_str("(<< P_x 1)").unwrap();
+        let r1 = Rule::new_rule(sexp1, sexp2).unwrap();
+
+        let sexp1 = parse_str("(* P_x P_y)").unwrap();
+        let sexp2 = parse_str("(* P_y P_x)").unwrap();
+        let r2 = Rule::new_rule(sexp1, sexp2).unwrap();
+
+        let sexp1 = parse_str("(* (P_x P_y) P_z)").unwrap();
+        let sexp2 = parse_str("(* P_x (P_y P_z))").unwrap();
+        let r3 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
+        let r4 = Rule::new_rule(sexp2, sexp1).unwrap();
+
+        let sexp1 = parse_str("(/ P_c P_c)").unwrap();
+        let sexp2 = parse_str("1").unwrap();
+        let r5 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
+
+        let sexp1 = parse_str("(/ (* P_x P_y) P_z)").unwrap();
+        let sexp2 = parse_str("(* P_x (/ P_y P_z))").unwrap();
+        let r6 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
+
+        let ruleset = [r1, r2, r3, r4, r5, r6].to_vec();
+        let edits = g.rewrite_ruleset(ruleset.clone());
+        print!("first pass edits: {}\n", edits);
+        let edits = g.rewrite_ruleset(ruleset.clone());
+        print!("second pass edits: {}\n", edits);
+        let edits = g.rewrite_ruleset(ruleset);
+        print!("third pass edits made: {}\n", edits);
+        g.print();
     }
 
-
-    #[test] //run this test function to see graph construction
-    fn patt_matching_test() {
-        struct Point {
-            x: i32,
-            y: i32,
-        }
-        let p = Point { x: 0, y: 7 };
-
-        match p {
-            Point { x, y } if x == y => println!("On the x axis at {x}"),
-            Point { x: 0, y } => println!("On the y axis at {y}"),
-            Point { x, y} =>println!("at {x} {y}")
-        }
-    }
 }
 
 

@@ -1,0 +1,9 @@
+(* P_x 2) -> (<< P_x 1) #strength reduction
+
+(* P_x P_y) -> (* P_y P_x) # associativity rules
+(* (P_x P_y) P_z) -> (* P_x (P_y P_z))
+(* P_x (P_y P_z)) -> (* (P_x P_y) P_z)
+(/ (* P_x P_y) P_z) -> (* P_x (/ P_y P_z))
+
+(/ P_c P_c) -> 1
+(* P_a 1) -> P_a
