@@ -1,5 +1,8 @@
 
 
+use core::f64;
+
+use daggy::petgraph::algo::matching;
 use symbolic_expressions::{Sexp, SexpError, parser};
 use crate::{Id, itoid};
 use crate::Enode;
@@ -9,6 +12,8 @@ use crate::mstr;
 use crate::pattern::{Pattern, Rule};
 use indexmap::{map::Values, IndexSet};
 
+// use petgraph::prelude::Graph;
+// use petgraph::dot::Dot;
 
 //we use hasmap instead of indexmap because indexmaps are more deterministic and easier to debug
 pub(crate) type BuildHasher = fxhash::FxBuildHasher;
@@ -39,14 +44,22 @@ impl EGraph{
         print!("{:?}\n", self.unionfind);
         print!("memo\n");
         for t in self.memo.clone(){
-            print!("{:?} \n", t);
+            print!("    {:?} \n", t);
         }
         print!("\nclasses\n");
         for t in self.classes.clone(){
-            print!("{:?} \n", t);
+            print!("    {:?} \n", t);
         }
         print!("dirty_unions {:?}\n", self.dirty_unions);
     }
+
+
+    // pub fn draw_egraph(&self){
+    //     let mut graph = Graph::<&str, u32>::new();
+    // }
+
+    // pub fn draw_recursive(&self, g: &Graph::<&str, u32>){
+    // }
 
     //return a eclass of a given id
     pub fn get_eclass(&self, id: Id) -> Option<&EClass>{
@@ -105,8 +118,10 @@ impl EGraph{
 
 
         self.memo.insert(enode.clone(), id);
+
         for child in enode.args.clone(){ // set parent pointers
-            self.classes[usize::from(child)].parents.insert(id);
+            let idx = self.classes.get_index_of(&child).unwrap();
+            self.classes[idx].parents.insert(id);
         }
         self.classes.insert(id, eclass);
         return id;
@@ -143,11 +158,12 @@ impl EGraph{
         return Some(id3);
     }
 
-    // Push a potentially new const eclass to the graph, then return Id
-    pub fn constant(&mut self, x: String) -> Id{
+    // Push a potentially new leaflet eclass to the graph, then return Id
+    pub fn leaflet(&mut self, x: String) -> Id{
         let mut t = Enode::new(x);
         return self.push_eclass(&mut t);
     }
+
 
     //insert a new Sexpr into the Egraph
     //this does so using recursion and merges already existing terms.
@@ -163,7 +179,7 @@ impl EGraph{
             return self.push_eclass(&mut term);
         } else { //sexp is leaflet
             let s = mstr!(f.to_string().trim_matches('"'));
-            return self.constant(s);
+            return self.leaflet(format!("{}", s));
         }
     }
 }
@@ -221,15 +237,16 @@ impl EGraph{
 
 
 //inefficient but simple pattern matching algorithm
+//if return None, no match was found
+//if return Some{ {} }, one or more matches were found but the provided pattern has no variables
+//if return Some{d} where d is a non-empty dict, one or more matches were found
 impl EGraph{
     fn match_pattern(&mut self ,e:EClass,  p:&Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
             let mut m = IndexMap::<Pattern, Enode>::default();
-
             for t in e.nodes{
                 m.insert(Pattern::PatVar(s.clone()), t.clone()); //probably 1
                 let id = self.find_eclass(&mut t.clone()).unwrap();
-                // print!("match pattern putting into buf: {:?}\n", t.clone());
                 sub.insert(t.clone(), id);
             }
             return Some(m);
@@ -241,20 +258,26 @@ impl EGraph{
                 }
                 else { //heads the same, check kids
                     let mut res = Vec::<IndexMap<Pattern, Enode>>::new();
+                    let mut matching_children = 0;
+
                     for (t1,p1) in t.args.iter().zip(p_args){ //for each arg in the term
                         let c = self.get_eclass(*t1).unwrap(); //derive eclass from t.arg
                         let d = self.match_pattern(c.clone(),p1, sub);
-                        if d.is_some(){ //if we had a result
+                        if d.is_some(){ //if we had a result, push the resulting dict onto res, d can be empty
                             res.push(d.unwrap());
+                            matching_children +=1;
                         }
                     }
-                    return EGraph::merge_consistent( res );
+                    if matching_children == t.args.len(){
+                        return EGraph::merge_consistent( res );
+                    }
                 }
             }
         }
         return None;
     }
 
+    //merge dicts and return None if a inconsistency is found
     fn merge_consistent(dicts: Vec<IndexMap<Pattern, Enode>>) -> Option<IndexMap<Pattern, Enode>>{
         let mut newd: IndexMap<Pattern, Enode> = IndexMap::<Pattern, Enode>::default();
     
@@ -278,10 +301,6 @@ impl EGraph{
         if let Pattern::PatVar(s) = p { //adding a patvar to the EG
             
             let t = translator.get(&Pattern::PatVar(s.clone()));
-            print!("instantiate received sub {:?}\n", sub);
-            print!("instantiate received trns {:?}\n", translator);
-
-            print!("pattern head = {}\n\n", mstr!(s));
             let tid = sub.get(t.unwrap()); //get the appropriate ID
 
             return Some(*tid.unwrap()); //return the appropriate ID
@@ -298,35 +317,39 @@ impl EGraph{
         return None; //instantiate breaks
     }
 
-    fn rewrite(&mut self, r:Rule){
-
-
+    //matches the given rule.lhs once with each eclass
+    //inserts rule.rhs whereever a match is found
+    //returns the number of times a rule is succesfully applied to an eclass
+    fn rewrite_lhs_to_rhs(&mut self, r:Rule) -> i32{
         let mut bufdict = IndexMap::<Enode, Id>::default();
         let mut translator = IndexMap::<Pattern, Enode>::default();
         let lhs = r.lhs.clone();
         let rhs = r.rhs.clone();
+
+        let mut edits = 0;
         for (n, cls) in self.classes.clone(){
             let matches =  self.match_pattern(cls, &lhs, &mut bufdict);
             if matches.is_some() {
-                    print!("found match {:?} for id {:?}\n", matches, n);
-                    let temp = matches.unwrap();
-                    // for sub in temp.clone(){
-                    //     print!("insering the term...\n");
-                    //     let id1 = self.instantiate(lhs.clone(), &temp,&bufdict);
-                    //     let id2 = self.instantiate(rhs.clone(), &temp,&bufdict);
-                    //     // matches.push(( self.instantiate(r.lhs ,sub), instantiate(r.rhs ,sub) )); 
-                    // }
+                edits += 1;
+                let temp = matches.unwrap();
+                let id1 =  self.instantiate(lhs.clone(), &temp,&bufdict);
+                let id2 =  self.instantiate(rhs.clone(), &temp,&bufdict);
+                self.union(id1.unwrap(), id2.unwrap());
 
-
-
-                    let id1 =  self.instantiate(lhs.clone(), &temp,&bufdict);
-                    let id2 =  self.instantiate(rhs.clone(), &temp,&bufdict);
-                    print!("success!\n\n");
-                    self.union(id1.unwrap(), id2.unwrap());
             }
         }
-        self.print();
+        return edits;
     }
+
+    //applies all rules in a passed ruleset to the egraph
+    fn rewrite_ruleset(&mut self, rs:Vec<Rule>)-> i32{
+        let mut edits = 0;
+        for r in rs{
+            edits += self.rewrite_lhs_to_rhs(r);
+        }
+        return edits;
+    }
+
 }
 
 
@@ -334,6 +357,9 @@ impl EGraph{
 #[cfg(test)]
 mod tests {
     use symbol_table::Symbol;
+    use symbolic_expressions::parser::parse_str;
+
+    use crate::pattern::new_pattern;
 
     use super::*; //allows this module to use previous scope
     static PATH: &str = "src/testsuite/";
@@ -387,14 +413,30 @@ mod tests {
         g.print();
     }
 
-    // pub enum Pattern {
-    //     PatVar(String),
-    //     PatTerm(String, Vec<Box<Pattern>>),
-    // }
-
 
     #[test] //to test ematching
     fn egraph_matching() {
+        let filepath = format!("{PATH}ints/const_mult.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.insert_sexpr(sexp);
+        print!("\nnew egraph: ");
+        g.print();
+
+        let sexp1 = parse_str("(* P_a 2)").unwrap();
+        let patt = new_pattern(sexp1.clone()).unwrap();
+
+        let mut dict = IndexMap::<Enode, Id>::default();
+
+        for (_, c) in g.classes.clone(){
+            print!("\nres = {:?}\n", g.match_pattern(c.clone(), &patt.clone(), &mut dict));
+        }
+        print!("var map = {:?}\n\n", dict);
+
+    }
+
+    #[test] //to test rewriting a graph once
+    fn egraph_rewrite() {
         let filepath = format!("{PATH}ints/mult.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
@@ -402,28 +444,51 @@ mod tests {
         print!("\nnew egraph: ");
         g.print();
 
-        let mut vec = Vec::<Box<Pattern>>::new();
-        let patv = Pattern::PatVar(mstr!("P_a"));
-        vec.push(Box::<Pattern>::new(patv));
-        let patv = Pattern::PatTerm(mstr!("2"), Vec::<Box<Pattern>>::new());
-        vec.push(Box::<Pattern>::new(patv));
-        let patt = Pattern::PatTerm(mstr!("*"), vec);
-        print!("{:?}\n", patt);
-
-        let mut vec2 = Vec::<Box<Pattern>>::new();
-        let patv2 = Pattern::PatVar(mstr!("P_a"));
-        vec2.push(Box::<Pattern>::new(patv2));
-        let patv2 = Pattern::PatTerm(mstr!("1"), Vec::<Box<Pattern>>::new());
-        vec2.push(Box::<Pattern>::new(patv2));
-        let patt2 = Pattern::PatTerm(mstr!("<<"), vec2);
-        print!("{:?}\n", patt2);
-
-        let n = g.get_eclass(itoid!(2)).unwrap();
-        let mut dict = IndexMap::<Enode, Id>::default();
-        print!("\nres = {:?}\n", g.match_pattern(n.clone(), &patt.clone(), &mut dict));
-        print!("var map = {:?}\n\n", dict);
-
-        let r = Rule {lhs: patt, rhs:patt2}; 
-        g.rewrite(r);
+        let sexp1 = parse_str("(* P_x 2)").unwrap();
+        let sexp2 = parse_str("(<< P_x 1)").unwrap();
+        let r = Rule::new_rule(sexp1, sexp2).unwrap();
+        g.rewrite_lhs_to_rhs(r);
+        g.print();
     }
+
+    #[test] //to test rewriting a graph multiple times
+    fn egraph_mass_rewrite() {
+        let filepath = format!("{PATH}ints/example.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.insert_sexpr(sexp);
+        print!("\nnew egraph: ");
+        g.print();
+
+        let sexp1 = parse_str("(* P_x 2)").unwrap();
+        let sexp2 = parse_str("(<< P_x 1)").unwrap();
+        let r1 = Rule::new_rule(sexp1, sexp2).unwrap();
+
+        let sexp1 = parse_str("(* P_x P_y)").unwrap();
+        let sexp2 = parse_str("(* P_y P_x)").unwrap();
+        let r2 = Rule::new_rule(sexp1, sexp2).unwrap();
+
+        let sexp1 = parse_str("(* (P_x P_y) P_z)").unwrap();
+        let sexp2 = parse_str("(* P_x (P_y P_z))").unwrap();
+        let r3 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
+        let r4 = Rule::new_rule(sexp2, sexp1).unwrap();
+
+        let sexp1 = parse_str("(/ P_c P_c)").unwrap();
+        let sexp2 = parse_str("1").unwrap();
+        let r5 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
+
+        let sexp1 = parse_str("(/ (* P_x P_y) P_z)").unwrap();
+        let sexp2 = parse_str("(* P_x (/ P_y P_z))").unwrap();
+        let r6 = Rule::new_rule(sexp1.clone(), sexp2.clone()).unwrap();
+
+        let ruleset = [r1, r2, r3, r4, r5, r6].to_vec();
+        let edits = g.rewrite_ruleset(ruleset.clone());
+        print!("first pass edits: {}\n", edits);
+        let edits = g.rewrite_ruleset(ruleset.clone());
+        print!("second pass edits: {}\n", edits);
+        let edits = g.rewrite_ruleset(ruleset);
+        print!("third pass edits made: {}\n", edits);
+        g.print();
+    }
+
 }

@@ -12,6 +12,7 @@ thiserror = "1.0.31"
 log = "0.4.17"
 
 
+
 # hashmap stuff
 fxhash = "0.2.1"
 hashbrown = "0.12.1"
@@ -26,3 +27,11 @@ symbolic_expressions = "5.0.3"
 smallvec = { version = "1.8.0", features = ["union", "const_generics"] }
 
 vectorize = { version = "0.2.0", optional = true }
+
+
+#egraph drawing
+serde_json = "1.0.45"
+
+[dependencies.petgraph]
+version = "0.5.0"
+features = ["serde-1"]
