@@ -60,6 +60,12 @@ impl EGraph{
     pub fn get_eclass(&self, id: Id) -> Option<&EClass>{
         return self.classes.get(&id);
     }
+    pub fn get_eclass_cpy(self, id: Id) -> Option<EClass>{
+        if let Some(c) = self.classes.get(&id){
+            return Some(c.clone());
+        }
+        return None;
+    }
 
 }
 
@@ -382,7 +388,9 @@ mod tests {
 
 
 
-    #[test] //run this test function to see adding a new term to a constructed graph
+    //run this test function to see adding a new term to a constructed graph
+    //note that doing this like this breaks the congruence invariant
+    #[test]
     fn egraph_editing() {
         let filepath = format!("{PATH}ints/mult.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -401,7 +409,7 @@ mod tests {
         g.print();
     }
 
-    #[test] //run this test function to see adding a new term to a constructed graph
+    #[test] //run this test function to see adding unioning 2 nodes
     fn egraph_union() {
         let filepath = format!("{PATH}ints/mult.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -476,6 +484,58 @@ mod tests {
         let edits = g.rewrite_ruleset(ruleset);
         print!("third pass edits made: {}\n", edits);
         g.print();
+    }
+
+    #[test] //rewrite a term a few times and extract some random terms from the graph
+    pub fn extract_random_terms(){
+        let filepath = format!("{PATH}ints/example.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.insert_sexpr(sexp);
+        let ruleset = read_ruleset(format!("src/rulesets/rulesetA.txt"));
+        g.rewrite_ruleset(ruleset.clone());
+        g.rebuild();
+        g.rewrite_ruleset(ruleset.clone());
+        g.rebuild();
+        g.rewrite_ruleset(ruleset);
+        g.rebuild();
+        g.print();
+        
+        if let Some(cls) = get_root_eclass(g.clone()){
+            for n in cls.nodes{
+                print!("res: {}\n", trav(g.clone(), n));
+            }
+        }
+    }
+
+    use rand::{thread_rng, Rng};
+    fn trav(e: EGraph, n: Enode) -> String{
+        let mut rng = thread_rng();
+        let mut ans = String::new();
+        if n.args.len() == 0 {return format!(" {}", n.head);}
+        ans.push_str(&format!(" ( {} ", n.head));
+
+        for id in n.args{
+            let cid = e.clone().find(id);
+            if let Some(c) = e.clone().get_eclass_cpy(cid){
+                
+                let ran = rng.gen_range(0..c.nodes.len());
+                let n2 = c.nodes[ran].clone();
+                ans.push_str(&trav(e.clone(), n2));
+                
+            }
+        }
+        ans.push_str(&format!(")"));
+        return ans;
+    }
+
+    fn get_root_eclass(g: EGraph) -> Option<EClass>{
+        for (_, i) in g.classes{
+            if i.parents.len() == 0{
+                return Some(i.clone());
+            }
+        }
+        return None
     }
 
 }

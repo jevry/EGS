@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 
+#for random numbers, purely to test term extraction
+rand = "0.8.5"
+
 #error logging stuff
 thiserror = "1.0.31"
 log = "0.4.17"
