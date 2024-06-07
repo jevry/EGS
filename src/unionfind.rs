@@ -60,7 +60,7 @@ impl UnionFind {
     }
 
     //checks if 2 nodes are in the same set
-    pub fn in_same_set(&mut self, id1:Id, id2:Id) -> bool {
+    pub fn in_same_set(&self, id1:Id, id2:Id) -> bool {
         return self.find(id1) == self.find(id2);
     }
 
@@ -114,6 +114,6 @@ mod tests {
         print!("after compression:          {:?}\n", uf);
 
         // indexes:                   0, 1, 2, 3, 4, 5, 6, 7, 8, 9
-        let expected = vec![0, 0, 0, 0, 4, 5, 0, 0, 0, 0];
+        //let expected = vec![0, 0, 0, 0, 4, 5, 0, 0, 0, 0];
     }
 }

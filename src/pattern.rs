@@ -3,7 +3,7 @@
 
 use std::fs::read_to_string;
 use symbolic_expressions::parser::parse_str;
-use symbolic_expressions::{Sexp, SexpError};
+use symbolic_expressions::Sexp;
 use crate::mstr;
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]

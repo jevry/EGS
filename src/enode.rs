@@ -19,3 +19,10 @@ impl Enode {
         return test;
     }
 }
+
+
+impl Enode {
+    pub fn len(&self)-> usize {
+        return self.args.len()
+    }
+}
