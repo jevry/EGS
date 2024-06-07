@@ -21,9 +21,9 @@ pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
 //`classes` to map equivalence class `Id` to the `EClass`
 #[derive(Debug, Clone)]
 pub struct EGraph{
-    unionfind:    UnionFind,
-    memo:         IndexMap<Enode, Id>,  //memory to store future term IDs
-    classes:      IndexMap<Id,EClass>,
+    pub(crate) unionfind:    UnionFind,
+    pub(crate) memo:         IndexMap<Enode, Id>,  //memory to store future term IDs
+    pub(crate) classes:      IndexMap<Id,EClass>,
     dirty_unions: Vec<Id>,
 }
 impl EGraph{
@@ -55,8 +55,8 @@ impl EGraph{
     }
 
     //return the eclass of a given id
-    pub fn get_eclass(&self, id: Id) -> Option<&EClass>{
-        return self.classes.get(&id);
+    pub fn get_eclass(&self, id: &Id) -> Option<&EClass>{
+        return self.classes.get(id);
     }
     //return a copy of the eclass of a given id
     pub fn get_eclass_cpy(&self, id: Id) -> Option<EClass>{
@@ -128,7 +128,7 @@ impl EGraph{
 
         for &child in &enode.args{ // set parent pointers
             let idx = self.classes.get_index_of(&child).unwrap();
-            self.classes[idx].parents.push(enode.clone());
+            self.classes[idx].parents.push((enode.clone(), id));
         }
         self.classes.insert(id, eclass);
         return id;
@@ -175,12 +175,12 @@ impl EGraph{
         let mut new_cls = self.classes.get(&id).unwrap().clone();
         self.classes.swap_remove(&id);
         let parents = new_cls.parents.clone();
-        new_cls.parents = Vec::<Enode>::new(); //clear parents
+        new_cls.parents = Vec::<(Enode, Id)>::new(); //clear parents
 
         //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
-        for mut t in parents{
+        for (mut t, t_id) in parents{
             if let Some(old_parent_id) = self.memo.swap_remove(&t){ // the parent should be updated to use the updated class id
-                new_cls.parents.push(self.canonicalize_args(&mut t)); //canonicalize
+                new_cls.parents.push((self.canonicalize_args(&mut t), t_id)); //canonicalize
                 self.memo.insert(t.clone(), old_parent_id); // replace in hash cons
             }
         }
@@ -255,7 +255,7 @@ impl EGraph{
 //if return Some{ {} }, one or more matches were found but the provided pattern has no variables
 //if return Some{d},    one or more matches were found
 impl EGraph{
-    fn match_pattern(&mut self, e: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
+    pub(crate) fn match_pattern(&mut self, e: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
             let mut m = IndexMap::<Pattern, Enode>::default();
             for t in &e.nodes {
@@ -365,7 +365,7 @@ impl EGraph{
     }
 
 
-    fn extract_shortest(&self, root_id: Id) -> Option<String>{
+    pub fn extract_shortest(&self, root_id: Id) -> Option<String>{
         let c_root_id = self.find(root_id);
         let cost_function= &ret_1;
         if let Some(c) = self.get_eclass_cpy(c_root_id){
@@ -411,12 +411,12 @@ impl EGraph{
 //it is reccomended to keep minimum cost at 1 to encourage short terms
 
 //always returns a cost of 1
-fn ret_1(s: &String) -> i32{
+pub fn ret_1(_: &String) -> i32{
     return 1;
 }
 
 //returns a cost based on the value of the operation
-fn ret_logical(s: &String) -> i32{
+pub fn ret_logical(s: &String) -> i32{
     return match s.as_str(){
         "/" => 4,
         "*" => 3,
