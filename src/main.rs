@@ -139,6 +139,7 @@ mod tests {
         }
     }
 
+    /*-------------------- EGRAPH TESTS --------------------*/
 
     use symbolic_expressions::parser;
     use crate::pattern::read_ruleset;

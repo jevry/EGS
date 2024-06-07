@@ -205,18 +205,17 @@ impl EGraph{
     //which first canonicalizes some nodes in memo
     //(NOT IMPLEMENTED:) and then checks for additional congruences that might have formed
     pub fn rebuild(&mut self){
-    while self.dirty_unions.len() > 0{
-        let mut todo = IndexSet::<Id>::new();
-        for i in self.dirty_unions.clone(){
-            todo.insert(self.find_mut(i));
-        }
-        self.dirty_unions = Vec::<Id>::new();
-        for id in todo{
-            self.repair(id)
+        while self.dirty_unions.len() > 0{
+            let mut todo = IndexSet::<Id>::new();
+            for i in self.dirty_unions.clone(){
+                todo.insert(self.find_mut(i));
+            }
+            self.dirty_unions = Vec::<Id>::new();
+            for id in todo{
+                self.repair(id)
+            }
         }
     }
-}
-
 
 
     // Push a potentially new leaflet eclass to the graph, then return Id
@@ -423,199 +422,4 @@ pub fn ret_logical(s: &String) -> i32{
         "<<" => 2,
         _ => 1 //unknown ops and loading consts/variables
     };
-}
-/* --------------------- */
-
-
-//run these tests on your local machine
-#[cfg(test)]
-mod tests {
-    use symbolic_expressions::parser::parse_str;
-    use symbolic_expressions::parser;
-    use crate::pattern::read_ruleset;
-    use crate::pattern::new_pattern;
-    use crate::itoid;
-
-    use super::*; //allows this module to use previous scope
-    static PATH: &str = "src/testsuite/";
-    static FILENAME: &str = "ints/example.txt";
-
-    #[test] //run this test function to see graph construction
-    fn egraph_construction() {
-        let filepath = format!("{PATH}{FILENAME}");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        print!("empty graph: {:?}\n", g);
-        let root = g.insert_sexpr(sexp);
-
-        print!("\nnew graph: ");
-        g.print();
-        print!("root: {:?}\n", root);
-    }
-
-
-
-    //run this test function to see adding a new term to a constructed graph
-    //note that doing this like this breaks the congruence invariant
-    #[test]
-    fn egraph_editing() {
-        let filepath = format!("{PATH}ints/mult.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
-        print!("\nnew egraph: ");
-        g.print();
-
-        let altsexp: Sexp = parser::parse_str("(<< a 1)").unwrap();
-
-        print!("\nextra term: {:?}\n", altsexp);
-        
-        g.insert_sexpr(altsexp);
-
-        print!("\nedited graph: ");
-        g.print();
-    }
-
-    #[test] //run this test function to see adding unioning 2 nodes
-    fn egraph_union() {
-        let filepath = format!("{PATH}ints/mult.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
-        let altsexp: Sexp = parser::parse_str("(<< a 1)").unwrap();
-        g.insert_sexpr(altsexp);
-
-        print!("\nedited graph: ");
-        g.print();
-
-        print!("\nunioning eclass 3 and 4...\n\n");
-        g.union(itoid!(2), itoid!(4));
-        g.print();
-    }
-
-
-    #[test] //to test ematching
-    fn egraph_matching() {
-        let filepath = format!("{PATH}ints/const_mult.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
-        print!("\nnew egraph: ");
-        g.print();
-
-        let sexp1 = parse_str("(* P_a 2)").unwrap();
-        let patt = new_pattern(sexp1.clone()).unwrap();
-
-        let mut dict = IndexMap::<Enode, Id>::default();
-
-        for (_, c) in g.classes.clone(){
-            print!("\nres = {:?}\n", g.match_pattern(&c, &patt, &mut dict));
-        }
-        print!("var map = {:?}\n\n", dict);
-
-    }
-
-    #[test] //to test rewriting a graph once
-    fn egraph_rewrite() {
-        let filepath = format!("{PATH}ints/mult.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
-        print!("\nnew egraph: ");
-        g.print();
-
-        let sexp1 = parse_str("(* P_x 2)").unwrap();
-        let sexp2 = parse_str("(<< P_x 1)").unwrap();
-        let r = &Rule::new_rule(sexp1, sexp2).unwrap();
-        g.rewrite_lhs_to_rhs(r);
-        g.print();
-    }
-
-    #[test] //to test rewriting a graph multiple times
-    pub fn egraph_mass_rewrite() {
-        let filepath = format!("{PATH}ints/example.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
-        print!("\nnew egraph: ");
-        g.print();
-
-
-        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
-        let edits = g.rewrite_ruleset(ruleset);
-
-        print!("first pass edits: {}\n", edits);
-        let edits = g.rewrite_ruleset(ruleset);
-
-        print!("second pass edits: {}\n", edits);
-        let edits = g.rewrite_ruleset(ruleset);
-        print!("third pass edits made: {}\n", edits);
-        g.rebuild();
-        g.print();
-    }
-
-
-
-    #[test] //rewrite a term a few times and extract some random terms from the graph
-    pub fn extract_random_terms(){
-        let filepath = format!("{PATH}ints/example.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        let root_id = g.insert_sexpr(sexp);
-        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.print();
-        
-        if let Some(cls) = g.get_eclass_cpy(root_id){
-            for n in cls.nodes{
-                print!("res: {}\n", extract_random(&g, n));
-            }
-        }
-    }
-
-    use rand::{thread_rng, Rng};
-    fn extract_random(e: &EGraph, n: Enode) -> String{
-        let mut rng = thread_rng();
-        let mut ans = String::new();
-        if n.len() == 0 {return format!(" {}", n.head);}
-        ans.push_str(&format!(" ( {} ", n.head));
-
-        for id in n.args{
-            let cid = e.find(id);
-            if let Some(c) = e.get_eclass_cpy(cid){
-                
-                let ran = rng.gen_range(0..c.nodes.len());
-                let n2 = c.nodes[ran].clone();
-                ans.push_str(&extract_random(e, n2));
-            }
-        }
-        ans.push_str(&format!(")"));
-        return ans;
-    }
-
-    #[test] //extracts the best found term from a set of options
-    fn term_extraction(){
-        let filepath = format!("{PATH}ints/example.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        let root_id = g.insert_sexpr(sexp);
-        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
-        g.rewrite_ruleset(ruleset);
-        // g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        // g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        // g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.print();
-        
-
-        print!("res: {:?}\n", g.extract_shortest(root_id));
-    }
 }
