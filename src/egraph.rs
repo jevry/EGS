@@ -40,13 +40,13 @@ impl EGraph{
     pub fn print(&self){
         print!("{:?}\n", self.unionfind);
         print!("memo\n");
-        for t in self.memo.clone(){
+        for t in &self.memo{
             print!("    {:?} \n", t);
         }
         print!("\nclasses\n");
-        for (i, c) in self.classes.clone(){
+        for (i, c) in &self.classes{
             print!("    eclass: {:?} \n", i);
-            for t in c.nodes{
+            for t in &c.nodes{
                 print!("        {:?} \n", t);
             }
             print!("        parents: {:?} \n\n", c.parents);
@@ -82,17 +82,17 @@ impl EGraph{
 
     // Checks if 2 given terms are in the same class.
     // Panics if either of the terms aren't present in the entire egraph.
-    pub fn in_same_class(&self, t1:Enode, t2:Enode) -> bool{
-        let (_, id1) = self.memo.get_key_value(&t1).unwrap();
-        let (_, id2) = self.memo.get_key_value(&t2).unwrap();
+    pub fn in_same_class(&self, t1: &Enode, t2: &Enode) -> bool{
+        let (_, id1) = self.memo.get_key_value(t1).unwrap();
+        let (_, id2) = self.memo.get_key_value(t2).unwrap();
         return self.unionfind.in_same_set(*id1, *id2);
     }
 
     // canonicalizes the args of a given term, then returns it
     pub fn canonicalize_args(&mut self, term: &mut Enode) -> Enode{
         let mut new = Vec::<Id>::new();
-        for i in term.args.clone(){
-            new.push(self.unionfind.find_mut(i));
+        for i in &term.args{
+            new.push(self.unionfind.find_mut(i.clone()));
         }
         term.args = new;
         return term.clone();
@@ -115,7 +115,7 @@ impl EGraph{
     }
 
     // Push a potentially new eclass to the graph, then return Id
-    pub fn push_eclass(&mut self, enode:&mut Enode) -> Id{
+    pub fn push_eclass(&mut self, enode: &mut Enode) -> Id{
         let id = self.find_eclass(enode);
         if id.is_some(){ //term already in the graph
             return id.unwrap();
@@ -140,7 +140,7 @@ impl EGraph{
         let (id1, id2) = (self.find_mut(id1), self.find_mut(id2));
         if id1 == id2{ return None }
         
-        let id3 = self.unionfind.union(id1,id2); 
+        let id3 = self.unionfind.union(id1, id2);
         self.dirty_unions.push(id3); // id3 will need it's parents processed in rebuild!
 
 
@@ -151,9 +151,8 @@ impl EGraph{
         // move nodes and parents from eclass[`from`] to eclass[`to`]
         to.nodes.extend(from.nodes);
         to.parents.extend(from.parents);
-        
-        
-        print!("new union\n");
+
+
         let mut temp = to.nodes.clone();
         to.nodes = Vec::<Enode>::new();
         // recanonize all nodes in memo.
@@ -161,7 +160,6 @@ impl EGraph{
             let &tid = self.memo.get(t).unwrap();
             self.memo.swap_remove(t);
             let t = self.canonicalize_args(t);
-            print!("{:?}\n",t);
             self.memo.insert(t.clone(), tid);
             to.nodes.push(t);
         }
@@ -588,7 +586,7 @@ mod tests {
         ans.push_str(&format!(" ( {} ", n.head));
 
         for id in n.args{
-            let cid = e.clone().find(id);
+            let cid = e.find(id);
             if let Some(c) = e.get_eclass_cpy(cid){
                 
                 let ran = rng.gen_range(0..c.nodes.len());
