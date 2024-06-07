@@ -335,7 +335,7 @@ impl EGraph{
     //matches the given rule.lhs once with each eclass
     //inserts rule.rhs whereever a match is found
     //returns the number of times a rule is succesfully applied to an eclass
-    pub fn rewrite_lhs_to_rhs(&mut self, r:Rule) -> i32{
+    pub fn rewrite_lhs_to_rhs(&mut self, r: &Rule) -> i32{
         let mut bufdict = IndexMap::<Enode, Id>::default();
         //let mut translator = IndexMap::<Pattern, Enode>::default();
         let lhs = r.lhs.clone();
@@ -357,7 +357,7 @@ impl EGraph{
     }
 
     //applies all rules in a passed ruleset to the egraph
-    pub fn rewrite_ruleset(&mut self, rs:Vec<Rule>)-> i32{
+    pub fn rewrite_ruleset(&mut self, rs:&Vec<Rule>)-> i32{
         let mut edits = 0;
         for r in rs{
             edits += self.rewrite_lhs_to_rhs(r);
@@ -528,7 +528,7 @@ mod tests {
 
         let sexp1 = parse_str("(* P_x 2)").unwrap();
         let sexp2 = parse_str("(<< P_x 1)").unwrap();
-        let r = Rule::new_rule(sexp1, sexp2).unwrap();
+        let r = &Rule::new_rule(sexp1, sexp2).unwrap();
         g.rewrite_lhs_to_rhs(r);
         g.print();
     }
@@ -543,11 +543,11 @@ mod tests {
         g.print();
 
 
-        let ruleset = read_ruleset(format!("src/rulesets/rulesetA.txt"));
-        let edits = g.rewrite_ruleset(ruleset.clone());
+        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
+        let edits = g.rewrite_ruleset(ruleset);
 
         print!("first pass edits: {}\n", edits);
-        let edits = g.rewrite_ruleset(ruleset.clone());
+        let edits = g.rewrite_ruleset(ruleset);
 
         print!("second pass edits: {}\n", edits);
         let edits = g.rewrite_ruleset(ruleset);
@@ -564,10 +564,10 @@ mod tests {
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
         let root_id = g.insert_sexpr(sexp);
-        let ruleset = read_ruleset(format!("src/rulesets/rulesetA.txt"));
-        g.rewrite_ruleset(ruleset.clone());
+        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
+        g.rewrite_ruleset(ruleset);
         g.rebuild();
-        g.rewrite_ruleset(ruleset.clone());
+        g.rewrite_ruleset(ruleset);
         g.rebuild();
         g.rewrite_ruleset(ruleset);
         g.rebuild();
@@ -575,13 +575,13 @@ mod tests {
         
         if let Some(cls) = g.get_eclass_cpy(root_id){
             for n in cls.nodes{
-                print!("res: {}\n", extract_random(g.clone(), n));
+                print!("res: {}\n", extract_random(&g, n));
             }
         }
     }
 
     use rand::{thread_rng, Rng};
-    fn extract_random(e: EGraph, n: Enode) -> String{
+    fn extract_random(e: &EGraph, n: Enode) -> String{
         let mut rng = thread_rng();
         let mut ans = String::new();
         if n.len() == 0 {return format!(" {}", n.head);}
@@ -593,8 +593,7 @@ mod tests {
                 
                 let ran = rng.gen_range(0..c.nodes.len());
                 let n2 = c.nodes[ran].clone();
-                ans.push_str(&extract_random(e.clone(), n2));
-                
+                ans.push_str(&extract_random(e, n2));
             }
         }
         ans.push_str(&format!(")"));
@@ -607,12 +606,12 @@ mod tests {
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
         let root_id = g.insert_sexpr(sexp);
-        let ruleset = read_ruleset(format!("src/rulesets/rulesetA.txt"));
-        g.rewrite_ruleset(ruleset.clone());
+        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
+        g.rewrite_ruleset(ruleset);
         // g.rebuild();
-        g.rewrite_ruleset(ruleset.clone());
+        g.rewrite_ruleset(ruleset);
         // g.rebuild();
-        g.rewrite_ruleset(ruleset.clone());
+        g.rewrite_ruleset(ruleset);
         // g.rebuild();
         g.rewrite_ruleset(ruleset);
         g.rebuild();

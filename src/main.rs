@@ -51,11 +51,11 @@ pub fn egraph_mass_rewrite() {
     g.print();
 
 
-    let ruleset = read_ruleset(format!("src/rulesets/rulesetA.txt"));
-    let edits = g.rewrite_ruleset(ruleset.clone());
+    let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
+    let edits = g.rewrite_ruleset(ruleset);
 
     print!("first pass edits: {}\n", edits);
-    let edits = g.rewrite_ruleset(ruleset.clone());
+    let edits = g.rewrite_ruleset(ruleset);
 
     print!("second pass edits: {}\n", edits);
     let edits = g.rewrite_ruleset(ruleset);
