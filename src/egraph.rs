@@ -89,11 +89,11 @@ impl EGraph{
         return self.unionfind.in_same_set(*id1, *id2);
     }
 
-    // canonicalizes the args of a given term, then returns it
-    pub fn canonicalize_args(&mut self, term: &mut Enode) -> Enode{
+    // canonicalizes the args of a given term
+    pub fn canonicalize_args(&self, term: &mut Enode) -> Enode{
         let mut new = Vec::<Id>::new();
         for i in &term.args{
-            new.push(self.unionfind.find_mut(i.clone()));
+            new.push(self.unionfind.find(i.clone()));
         }
         term.args = new;
         return term.clone();
@@ -104,13 +104,13 @@ impl EGraph{
     //NOTE: Currently overcomplicated because canonicalize_args
     //doesnt properly update the egraph, as a result there is no garuantee wheter
     //the node is stored canonicalized or not
-    pub fn find_eclass(&mut self, enode: &mut Enode) -> Option<Id>{
+    pub fn find_eclass(&self, enode: &mut Enode) -> Option<Id>{
         if let Some(id) = self.memo.get(enode){
-            return Some(self.find_mut(*id));
+            return Some(self.find(*id));
         }
-        let t = self.canonicalize_args(enode);
-        if let Some(id) = self.memo.get(&t){
-            return Some(self.find_mut(*id));
+        self.canonicalize_args(enode);
+        if let Some(id) = self.memo.get(enode){
+            return Some(self.find(*id));
         }
         return None;
     }
@@ -159,10 +159,11 @@ impl EGraph{
         // recanonize all nodes in memo.
         for t in &mut temp{
             let &tid = self.memo.get(t).unwrap();
+            let tid = self.find_mut(tid);
             self.memo.swap_remove(t);
-            let t = self.canonicalize_args(t);
+            self.canonicalize_args(t);
             self.memo.insert(t.clone(), tid);
-            to.nodes.push(t);
+            to.nodes.push(t.clone());
         }
 
         self.classes.insert(to_id, to); //replace old `to` with new `to`
@@ -180,6 +181,8 @@ impl EGraph{
         //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
         for (mut t, t_id) in parents{
             if let Some(old_parent_id) = self.memo.swap_remove(&t){ // the parent should be updated to use the updated class id
+                let t_id = self.find(t_id);
+                let old_parent_id = self.find(old_parent_id);
                 new_cls.parents.insert(self.canonicalize_args(&mut t), t_id); //canonicalize
                 self.memo.insert(t.clone(), old_parent_id); // replace in hash cons
             }
@@ -204,7 +207,7 @@ impl EGraph{
 
     //calls repair on "duty unions"
     //which first canonicalizes some nodes in memo
-    //(NOT IMPLEMENTED:) and then checks for additional congruences that might have formed
+    //and then checks for additional congruences that might have formed
     pub fn rebuild(&mut self){
         while self.dirty_unions.len() > 0{
             let mut todo = IndexSet::<Id>::new();
@@ -226,7 +229,7 @@ impl EGraph{
     }
 
 
-    
+
 
     //insert a new Sexpr into the Egraph and return the id of the root eclass
     //this does so using recursion and merges already existing terms.
@@ -255,7 +258,7 @@ impl EGraph{
 //if return Some{ {} }, one or more matches were found but the provided pattern has no variables
 //if return Some{d},    one or more matches were found
 impl EGraph{
-    pub(crate) fn match_pattern(&mut self, e: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
+    pub(crate) fn match_pattern(&self, e: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
             let mut m = IndexMap::<Pattern, Enode>::default();
             for t in &e.nodes {
@@ -276,7 +279,7 @@ impl EGraph{
                     let mut matching_children = 0;
 
                     for (t1, p1) in t.args.iter().zip(p_args){ //for each arg in the term
-                        let new = self.find_mut(*t1);
+                        let new = self.find(*t1);
                         let c = self.get_eclass_cpy(new).unwrap(); //derive eclass from t.arg
                         let d = self.match_pattern(&c,p1, sub);
                         if let Some(d) = d {
@@ -339,11 +342,9 @@ impl EGraph{
         let lhs = r.lhs.clone();
         let rhs = r.rhs.clone();
 
-        //optimization option: to stop needing to clone all of self.classes, get_eclass needs to be non-mutable
-        //to achieve this canonicalisation must be garuanteed better, otherwise a non-mutable get_eclass can panic
-        let mut edits = 0;
+        let mut edits = 0; //used for statistics
         let mut matchvec = Vec::<Option<IndexMap<Pattern, Enode>>>::new();
-        for (_, cls) in self.classes.clone(){
+        for (_, cls) in &self.classes{
             let matches =  self.match_pattern(&cls, &lhs, &mut bufdict);
             matchvec.push(matches);
         }
@@ -365,6 +366,7 @@ impl EGraph{
     pub fn rewrite_ruleset(&mut self, rs:&Vec<Rule>)-> i32{
         let mut edits = 0;
         for r in rs{
+            //bug: applying rebuild after every rewrite panics if you rewrite_ruleset twice
             edits += self.rewrite_lhs_to_rhs(r);
         }
         

@@ -42,11 +42,11 @@ pub fn egraph_mass_rewrite() {
     let root_id = g.insert_sexpr(sexp);
     let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
     g.rewrite_ruleset(ruleset);
-    // g.rebuild();
+    g.rebuild();
     g.rewrite_ruleset(ruleset);
-    // g.rebuild();
+    g.rebuild();
     g.rewrite_ruleset(ruleset);
-    // g.rebuild();
+    g.rebuild();
     g.rewrite_ruleset(ruleset);
     g.rebuild();
     g.print();
