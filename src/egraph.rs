@@ -11,6 +11,7 @@ use crate::EClass;
 use crate::mstr;
 use crate::pattern::{Pattern, Rule};
 use indexmap::IndexSet;
+use bimap::BiMap;
 
 //we use hasmap instead of indexmap because indexmaps are more deterministic and easier to debug
 pub(crate) type BuildHasher = fxhash::FxBuildHasher;
@@ -128,7 +129,7 @@ impl EGraph{
 
         for &child in &enode.args{ // set parent pointers
             let idx = self.classes.get_index_of(&child).unwrap();
-            self.classes[idx].parents.push((enode.clone(), id));
+            self.classes[idx].parents.insert(enode.clone(), id);
         }
         self.classes.insert(id, eclass);
         return id;
@@ -173,32 +174,32 @@ impl EGraph{
     fn repair(&mut self, id:Id){
         //clone the entire eclass, extremely inefficient but rust refuses to play nice otherwise
         let mut new_cls = self.classes.get(&id).unwrap().clone();
-        self.classes.swap_remove(&id);
         let parents = new_cls.parents.clone();
-        new_cls.parents = Vec::<(Enode, Id)>::new(); //clear parents
-
+        new_cls.parents.clear(); //clear parents
+        
         //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
         for (mut t, t_id) in parents{
             if let Some(old_parent_id) = self.memo.swap_remove(&t){ // the parent should be updated to use the updated class id
-                new_cls.parents.push((self.canonicalize_args(&mut t), t_id)); //canonicalize
+                new_cls.parents.insert(self.canonicalize_args(&mut t), t_id); //canonicalize
                 self.memo.insert(t.clone(), old_parent_id); // replace in hash cons
             }
         }
-        self.classes.insert(id, new_cls);
-
+        
+        
         // now we need to discover possible new congruence equalities in the parent nodes.
         // we do this by building up a parent hash to see if any new terms are generated.
-        // new_parents = Dict()
-        // for (t,t_id) in cls.parents {
-        //     self.canonicalize_args(t) // canonicalize. Unnecessary by the above?
-        //     if haskey(new_parents, t){
-        //         self.union(t_id, new_parents[t])
-        //     }
+        let mut new_parents = bimap::BiMap::<Enode, Id>::new();
+        for (mut t,t_id) in &new_cls.parents {
+            //let t = self.canonicalize_args(&mut t); // canonicalize. Unnecessary by the above?
+            if let Some(n_id) = new_parents.get_by_left(&t) {
+                self.union(*t_id, *n_id);
+            }
+            
+            new_parents.insert(t.clone(), self.find(*t_id));
+        }
+        new_cls.parents =  new_parents;
 
-        //     new_parents[t] = self.find_root!(e, t_id)
-        // }
-
-        // e.classes[id].parents = [ (p,id) for (p,id) in new_parents]
+        self.classes.insert(id, new_cls);
     }
 
     //calls repair on "duty unions"
@@ -338,9 +339,16 @@ impl EGraph{
         let lhs = r.lhs.clone();
         let rhs = r.rhs.clone();
 
+        //optimization option: to stop needing to clone all of self.classes, get_eclass needs to be non-mutable
+        //to achieve this canonicalisation must be garuanteed better, otherwise a non-mutable get_eclass can panic
         let mut edits = 0;
+        let mut matchvec = Vec::<Option<IndexMap<Pattern, Enode>>>::new();
         for (_, cls) in self.classes.clone(){
             let matches =  self.match_pattern(&cls, &lhs, &mut bufdict);
+            matchvec.push(matches);
+        }
+
+        for matches in matchvec {
             if matches.is_some() {
                 edits += 1;
                 let temp = matches.unwrap();

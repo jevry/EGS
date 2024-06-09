@@ -6,7 +6,6 @@
 //all the tests are stored here
 
 
-
 mod id; use id::Id;
 mod util;
 use symbolic_expressions::{Sexp, parser};
@@ -29,19 +28,10 @@ mod pattern;
 
 
 
-
-
-
-
-
 //TODO: empty this defunct code
 fn main() {
     egraph_mass_rewrite();
 }
-
-
-
-
 
 
 pub fn egraph_mass_rewrite() {
@@ -315,11 +305,11 @@ mod tests {
         let root_id = g.insert_sexpr(sexp);
         let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
         g.rewrite_ruleset(ruleset);
-        // g.rebuild();
+        g.rebuild();
         g.rewrite_ruleset(ruleset);
-        // g.rebuild();
+        g.rebuild();
         g.rewrite_ruleset(ruleset);
-        // g.rebuild();
+        g.rebuild();
         g.rewrite_ruleset(ruleset);
         g.rebuild();
         g.print();
@@ -327,7 +317,7 @@ mod tests {
 
         let str =  g.extract_shortest(root_id).unwrap();
         if let Ok(res) = parser::parse_str(&str){
-            pretty_print(&res, 5);
+            pretty_print(&res, 10);
         }
     }
 }
