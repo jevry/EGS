@@ -297,27 +297,40 @@ mod tests {
         return ans;
     }
 
+    const INTS: &str = "ints/";
+    const IEXAMPLE: &str = "example.txt";
+
+    const PEANO: &str = "peano/";
+    const PSUM: &str = "sum.txt";
+    const ZEROS: &str = "add_zeros.txt";
+
+    //rulesets
+    const R_PEANO: &str = "src/rulesets/peano_ruleset.txt";
+    const R_A: &str = "src/rulesets/rulesetA.txt";
+    const R_ZEROS: &str = "src/rulesets/recursive_rule.txt"; 
+
+
     #[test] //extracts the best found term from a set of options
     fn term_extraction(){
-        let filepath = format!("{PATH}ints/example.txt");
+        let filepath = format!("{PATH}{INTS}{ZEROS}");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
         let root_id = g.insert_sexpr(sexp);
-        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
+        let ruleset = &read_ruleset(format!("{R_ZEROS}"));
+
+        for i in 0..1{
+            print!("rewrite {}\n", i);
+            g.rewrite_ruleset(ruleset);
+        }
         g.print();
         
 
-        let str =  g.extract_shortest(root_id).unwrap();
-        if let Ok(res) = parser::parse_str(&str){
-            pretty_print(&res, 10);
+        if let Some(str) =  g.extract_shortest(root_id){
+            if let Ok(res) = parser::parse_str(&str){
+                pretty_print(&res, 10);
+            }
+        } else{
+            print!("\nFailure to find extractable sexpr\n");
         }
     }
 }

@@ -59,7 +59,7 @@ impl Rule{
 pub fn read_ruleset(filepath: String) -> Vec::<Rule> {
     let mut res = Vec::<Rule>::new();
     for line in read_to_string(filepath).unwrap().lines() {
-        if line.len() == 0{continue;}
+        if line.len() == 0 || line.starts_with("#") {continue;}//empty line or comment
         let parts = line.split("->").collect::<Vec<&str>>();
         if parts.len() > 1{
             if let Ok(lhs) = parse_str(parts[0]){

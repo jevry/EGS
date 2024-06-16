@@ -1,12 +1,23 @@
-(* P_x 2) -> (<< P_x 1) #strength reduction
+# the example ruleset
+# empty lines, lines without '->' and lines starting with '#' get ignored
+# any placeholder variables are denoted with a 'P_'
 
-(* P_x P_y) -> (* P_y P_x) # associativity rules
+#strength reduction
+(* P_x 2) -> (<< P_x 1)
 
-(* (P_x P_y) P_z) -> (* P_x (P_y P_z))
-(* P_x (P_y P_z)) -> (* (P_x P_y) P_z)
+#commutativity
+(* P_x P_y) -> (* P_y P_x)
 
+#associativity
+(* (* P_x P_y) P_z) -> (* P_x (* P_y P_z))
+(* P_x (* P_y P_z)) -> (* (* P_x P_y) P_z)
+
+#associativity with division
 (/ (* P_x P_y) P_z) -> (* P_x (/ P_y P_z))
 
-(/ P_c P_c) -> 1
+(* P_x (/ P_y 1)) -> (* P_x P_y)
+(* P_x P_y) -> (* P_x (/ P_y 1))
 
+#simplification rules
+(/ P_c P_c) -> 1
 (* P_a 1) -> P_a

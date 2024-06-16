@@ -3,6 +3,9 @@
 
 
 
+use std::default;
+use std::vec;
+
 use symbolic_expressions::Sexp;
 use crate::Id;
 use crate::Enode;
@@ -158,12 +161,15 @@ impl EGraph{
         to.nodes = Vec::<Enode>::new();
         // recanonize all nodes in memo.
         for t in &mut temp{
-            let &tid = self.memo.get(t).unwrap();
-            let tid = self.find_mut(tid);
-            self.memo.swap_remove(t);
-            self.canonicalize_args(t);
-            self.memo.insert(t.clone(), tid);
-            to.nodes.push(t.clone());
+            if let Some(mut tid) = self.memo.get(t){
+                let mut tid = *tid;
+                let tid = self.find_mut(tid);
+                self.memo.swap_remove(t);
+                self.canonicalize_args(t);
+                self.memo.insert(t.clone(), tid);
+                to.nodes.push(t.clone());
+            }
+            
         }
 
         self.classes.insert(to_id, to); //replace old `to` with new `to`
@@ -252,12 +258,12 @@ impl EGraph{
 
 
 
-//inefficient but relatively simple pattern matching algorithm
-//returns a "dict" that translates patterns to enodes
-//if return None,       no match was found
-//if return Some{ {} }, one or more matches were found but the provided pattern has no variables
-//if return Some{d},    one or more matches were found
 impl EGraph{
+    //inefficient but relatively simple pattern matching algorithm
+    //returns a "dict" that translates patterns to enodes
+    //if return None,       no match was found
+    //if return Some{ {} }, one or more matches were found but the provided pattern has no variables
+    //if return Some{d},    one or more matches were found
     pub(crate) fn match_pattern(&self, e: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
             let mut m = IndexMap::<Pattern, Enode>::default();
@@ -330,7 +336,7 @@ impl EGraph{
             }
             return Some(self.push_eclass(&mut t)); //push term into EGraph
         }
-        return None; //instantiate breaks
+        return None; //unreachable
     }
 
     //matches the given rule.lhs once with each eclass
@@ -352,9 +358,9 @@ impl EGraph{
         for matches in matchvec {
             if matches.is_some() {
                 edits += 1;
-                let temp = matches.unwrap();
-                let id1 =  self.instantiate(lhs.clone(), &temp,&bufdict);
-                let id2 =  self.instantiate(rhs.clone(), &temp,&bufdict);
+                let translator = matches.unwrap();
+                let id1 =  self.instantiate(lhs.clone(), &translator,&bufdict);
+                let id2 =  self.instantiate(rhs.clone(), &translator,&bufdict);
                 self.union(id1.unwrap(), id2.unwrap());
 
             }
@@ -365,55 +371,83 @@ impl EGraph{
     //applies all rules in a passed ruleset to the egraph
     pub fn rewrite_ruleset(&mut self, rs:&Vec<Rule>)-> i32{
         let mut edits = 0;
+        self.print();
         for r in rs{
-            //bug: applying rebuild after every rewrite panics if you rewrite_ruleset twice
             edits += self.rewrite_lhs_to_rhs(r);
+            self.rebuild();
+            self.print();
+            print!("okay\n\n");
         }
-        
+        print!("done editing\n\n\n");
         return edits;
     }
 
+}
 
+/* --------------------- */
+//the extraction algorithm
+/* --------------------- */
+impl EGraph{
+    
+    //depth first extract with a visited list to prevent infinitely looping
+    //the visited list is just to keep track what each "line" of extract has visited.
+    //an individual line can never visit the same eclass twice
+    //though a splitted line might
+    pub fn extract(&self, visited: &Vec<Id>, cid: Id, cost_function: &dyn Fn(&String) -> i32) -> Option<(i32, String)> {
+        let cid = self.find(cid);
+        let class = self.get_eclass(&cid).unwrap();
+        let mut evaluation = Vec::<(i32, String)>::new();
+        let mut next_visited = visited.clone();
+        next_visited.push(cid);
+
+        for n in class.nodes.clone(){
+            let mut cost = cost_function(&n.head);
+            let mut str = format!("({}", &n.head);
+            
+            if let Some(cid_of_node) = self.find_eclass(&mut n.clone()){
+                if visited.contains(&cid_of_node){
+                    continue;
+                }
+            }
+            let mut eval = true;
+            for arg in n.args{
+                let c_root_id = self.find(arg);
+                if let Some(c) = self.get_eclass_cpy(c_root_id){
+                    if let Some((res, s)) = self.extract(&next_visited, arg, cost_function){
+                        cost += res;
+                        str.push_str(&format!(" {}", s));
+                    } else{
+                        eval = false;
+                        continue;
+                    }
+                }
+            }
+            if eval{
+                evaluation.push((cost, format!("{})", str)));
+            }
+        }
+        
+        if let Some(tn) = evaluation.iter().min_by_key(|d|d.0){
+            return Some(tn.clone());
+        }
+        return None
+        
+    }
+
+    //an example of an extraction function
+    //root_id is the id of the eclass you want to start the extraction from
     pub fn extract_shortest(&self, root_id: Id) -> Option<String>{
-        let c_root_id = self.find(root_id);
+        //canonicalize the id of the root eclass
+        let canonical_root_id = self.find(root_id);
         let cost_function= &ret_1;
-        if let Some(c) = self.get_eclass_cpy(c_root_id){
-            let (_, res) = self.extract(c, cost_function);
+        let visited = Vec::<Id>::default();
+        if let Some((_, res)) = self.extract(&visited, canonical_root_id, cost_function){
             return Some(res);
         }
         return None;
     }
 
-    pub fn extract(&self, c: EClass, cost_function: &dyn Fn(&String) -> i32) -> (i32, String) {
-        let mut todo = Vec::<Enode>::new();
-        for n in c.nodes.clone(){
-            if n.len() == 0{
-                return (cost_function(&n.head), n.head);
-            } else {
-                todo.push(n);
-            }
-        }
-
-        let mut evaluation = Vec::<(i32, String)>::new();
-        for n in todo{
-            let mut cost = cost_function(&n.head);
-            let mut str = format!("({}", &n.head);
-            for arg in n.args{
-                let c_root_id = self.find(arg);
-                if let Some(c) = self.get_eclass_cpy(c_root_id){
-                    let (res, s) = self.extract(c, cost_function);
-                    cost += res;
-                    str.push_str(&format!(" {}", s));
-                }
-            }
-            evaluation.push((cost, format!("{})", str)));
-        }
-        let tn = evaluation.iter().min_by_key(|d|d.0).unwrap();
-        
-        return tn.clone();
-    }
 }
-
 
 /* --------------------- */
 //some cost function examples
@@ -427,9 +461,11 @@ pub fn ret_1(_: &String) -> i32{
 //returns a cost based on the value of the operation
 pub fn ret_logical(s: &String) -> i32{
     return match s.as_str(){
+        "+" => 2,
         "/" => 4,
         "*" => 3,
         "<<" => 2,
+        "succ" => 0,
         _ => 1 //unknown ops and loading consts/variables
     };
 }
