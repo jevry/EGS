@@ -142,8 +142,9 @@ impl EGraph{
     //returns None if the 2 classes are already in the same class
     pub fn union(&mut self, id1: Id, id2: Id) -> Option<Id> {
         let (id1, id2) = (self.find_mut(id1), self.find_mut(id2));
-        if id1 == id2{ return None }
-        
+        if id1 == id2{ print!("!!!failed union!!!\n\n"); return None }
+        print!("---succesfull union---\n\n");
+
         let id3 = self.unionfind.union(id1, id2);
         self.dirty_unions.push(id3); // id3 will need it's parents processed in rebuild!
 
@@ -180,32 +181,48 @@ impl EGraph{
 
     fn repair(&mut self, id:Id){
         //clone the entire eclass, extremely inefficient but rust refuses to play nice otherwise
+        let id = self.find(id);
         let mut new_cls = self.classes.get(&id).unwrap().clone();
         let parents = new_cls.parents.clone();
+        
+        let mut tofix = Vec::<(Enode, Id)>::new();
+
+
+        print!("\nprerepair parents {:?}\n", parents);
         new_cls.parents.clear(); //clear parents
         
         //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
         for (mut t, t_id) in parents{
             if let Some(old_parent_id) = self.memo.swap_remove(&t){ // the parent should be updated to use the updated class id
-                let t_id = self.find(t_id);
-                let old_parent_id = self.find(old_parent_id);
+                print!("parent located: {:?}, {:?}\n",t , &t_id);
+                let t_id = self.find_mut(t_id);
+                let old_parent_id = self.find_mut(old_parent_id);
                 new_cls.parents.insert(self.canonicalize_args(&mut t), t_id); //canonicalize
+                tofix.push((self.canonicalize_args(&mut t), t_id));
                 self.memo.insert(t.clone(), old_parent_id); // replace in hash cons
-            }
+            } else { // the parent should be updated to use the updated class id
+                print!("parent relocated: {:?}, {:?}\n",t , &t_id);
+                tofix.push((self.canonicalize_args(&mut t), t_id));
+            } 
+            
         }
-        
-        
+        print!("postrepair parents {:?}\n\n", new_cls.parents);
+
         // now we need to discover possible new congruence equalities in the parent nodes.
         // we do this by building up a parent hash to see if any new terms are generated.
         let mut new_parents = bimap::BiMap::<Enode, Id>::new();
-        for (mut t,t_id) in &new_cls.parents {
+        for (mut t,t_id) in tofix {
             //let t = self.canonicalize_args(&mut t); // canonicalize. Unnecessary by the above?
+            let t_id = self.find(t_id);
+            print!("need to union {:?}, {:?}\n", t, t_id);
             if let Some(n_id) = new_parents.get_by_left(&t) {
-                self.union(*t_id, *n_id);
+                print!("repairs: unioning {:?} and {:?}\n", t_id, n_id);
+                self.union(t_id, *n_id);
             }
             
-            new_parents.insert(t.clone(), self.find(*t_id));
+            new_parents.insert(t.clone(), self.find(t_id));
         }
+        print!("done\n");
         new_cls.parents =  new_parents;
 
         self.classes.insert(id, new_cls);
@@ -323,17 +340,20 @@ impl EGraph{
     //this means that the VAR symbol comes from pattern and the ID from the EGraph
     fn instantiate(&mut self, p: Pattern, translator: &IndexMap<Pattern, Enode>, sub: &IndexMap<Enode, Id>) -> Option<Id>{
         if let Pattern::PatVar(s) = p { //adding a patvar to the EG
-            let t = translator.get(&Pattern::PatVar(s));
+            let t = translator.get(&Pattern::PatVar(s.clone()));
+            print!("adding {} as {:?}\n", &s, &t);
             let tid = sub.get(t.unwrap()); //get the appropriate ID
+
             return Some(*tid.unwrap()); //return the appropriate ID
 
         } else if let Pattern::PatTerm(p_head, p_args) = p {
-            let mut t = Enode::new(p_head); //get term head
+            let mut t = Enode::new(p_head.clone()); //get term head
             for a in p_args { //get terms in p_args
-
+                
                 //recursive call, return val is the ID of the Enode the call added to the EGraph
                 t.args.push(self.instantiate(*a, translator, &sub).unwrap());//push that ID to our term
             }
+            print!("adding {} as {:?}\n", &p_head, &t);
             return Some(self.push_eclass(&mut t)); //push term into EGraph
         }
         return None; //unreachable
@@ -354,9 +374,11 @@ impl EGraph{
             let matches =  self.match_pattern(&cls, &lhs, &mut bufdict);
             matchvec.push(matches);
         }
-
+        print!("dict: {:?}\n",  &bufdict);
         for matches in matchvec {
             if matches.is_some() {
+                print!("found match {:?}\n", matches);
+                print!("instantiating: {:?}\n", rhs);
                 edits += 1;
                 let translator = matches.unwrap();
                 let id1 =  self.instantiate(lhs.clone(), &translator,&bufdict);
@@ -374,11 +396,16 @@ impl EGraph{
         self.print();
         for r in rs{
             edits += self.rewrite_lhs_to_rhs(r);
-            self.rebuild();
+            print!("---PRE-REPAIRS STATUS:\n\n");
             self.print();
-            print!("okay\n\n");
+            print!("\n---STARTING REPAIRS\n laundry: {:?}\n", self.dirty_unions);
+            self.rebuild();
+            print!("---FINISHING REPAIRS\n\n");
+            print!("---RESULT:\n");
+            self.print();
+            // print!("okay\n\n");
         }
-        print!("done editing\n\n\n");
+        // print!("done editing\n\n\n");
         return edits;
     }
 

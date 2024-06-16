@@ -318,7 +318,7 @@ mod tests {
         let root_id = g.insert_sexpr(sexp);
         let ruleset = &read_ruleset(format!("{R_ZEROS}"));
 
-        for i in 0..1{
+        for i in 0..2{
             print!("rewrite {}\n", i);
             g.rewrite_ruleset(ruleset);
         }
