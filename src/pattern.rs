@@ -56,7 +56,7 @@ impl Rule{
 }
 
 
-pub fn read_ruleset(filepath: String) -> Vec::<Rule> {
+pub fn read_ruleset(filepath: &str) -> Vec::<Rule> {
     let mut res = Vec::<Rule>::new();
     for line in read_to_string(filepath).unwrap().lines() {
         if line.len() == 0 || line.starts_with("#") {continue;}//empty line or comment

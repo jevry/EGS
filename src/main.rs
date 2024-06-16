@@ -40,7 +40,7 @@ pub fn egraph_mass_rewrite() {
     let sexp: Sexp = parser::parse_file(&filepath).unwrap();
     let mut g = EGraph::new();
     let root_id = g.insert_sexpr(sexp);
-    let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
+    let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
     g.rewrite_ruleset(ruleset);
     g.rebuild();
     g.rewrite_ruleset(ruleset);
@@ -240,7 +240,7 @@ mod tests {
         g.print();
 
 
-        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
+        let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
         let edits = g.rewrite_ruleset(ruleset);
 
         print!("first pass edits: {}\n", edits);
@@ -261,7 +261,7 @@ mod tests {
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
         let root_id = g.insert_sexpr(sexp);
-        let ruleset = &read_ruleset(format!("src/rulesets/rulesetA.txt"));
+        let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
         g.rewrite_ruleset(ruleset);
         g.rebuild();
         g.rewrite_ruleset(ruleset);
@@ -297,31 +297,66 @@ mod tests {
         return ans;
     }
 
-    const INTS: &str = "ints/";
-    const IEXAMPLE: &str = "example.txt";
-
-    const PEANO: &str = "peano/";
-    const PSUM: &str = "sum.txt";
-    const ZEROS: &str = "add_zeros.txt";
+    const INTS: &str = "ints/example.txt";
+    const PEANO: &str = "peano/sum.txt";
+    const ZEROS: &str = "ints/add_zeros.txt";
 
     //rulesets
     const R_PEANO: &str = "src/rulesets/peano_ruleset.txt";
     const R_A: &str = "src/rulesets/rulesetA.txt";
     const R_ZEROS: &str = "src/rulesets/recursive_rule.txt"; 
 
+    #[test] //proof that multiple rewrites work
+    fn extract_chain(){
+        //chain is deliberately built to require 4 iterations to find the
+        //optimal rewrite
+        let filepath = &format!("{PATH}chain.txt");
+        let rulepath = &format!("src/rulesets/chain_ruleset.txt");
+        let iter = 4;
+        rewrite_extract(filepath, rulepath, iter);
+    }
 
-    #[test] //extracts the best found term from a set of options
-    fn term_extraction(){
-        let filepath = format!("{PATH}{INTS}{ZEROS}");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+    #[test] //extracts the best found term from a simplification ruleset
+    fn extract_zeros(){
+        //(n x) -> x is the only used rule
+        //for some reason it fails to finish the last simplify step
+        //the issue is because of something in the rebuild function
+        let filepath = &format!("{PATH}{ZEROS}");
+        let rulepath = &format!("{R_ZEROS}");
+        let iter = 2;
+        rewrite_extract(filepath, rulepath, iter);
+    }
+
+    #[test] //extracts the best found term from peano 2+2
+    fn extract_peano(){
+        //for some reason it finds 3+1 and fails to find 4
+        //the issue is because of something in the rebuild function
+        let filepath = &format!("{PATH}{PEANO}");
+        let rulepath = &format!("{R_PEANO}");
+        let iter = 2;
+        rewrite_extract(filepath, rulepath, iter);
+    }
+
+    #[test] //extracts the best found term from example.txt
+    fn extract_example(){
+        let filepath = &format!("{PATH}{INTS}");
+        let rulepath = &format!("{R_A}");
+        let iter = 2;
+        rewrite_extract(filepath, rulepath, iter);
+    }
+
+    fn rewrite_extract(filepath: &str, rulepath: &str, rewrites: u32){
+        let sexp: Sexp = parser::parse_file(filepath).unwrap();
         let mut g = EGraph::new();
         let root_id = g.insert_sexpr(sexp);
-        let ruleset = &read_ruleset(format!("{R_ZEROS}"));
+        let ruleset = &read_ruleset(rulepath);
 
-        for i in 0..1{
+        for i in 0..rewrites{
             print!("rewrite {}\n", i);
             g.rewrite_ruleset(ruleset);
         }
+        print!("\n\n");
+
         g.print();
         
 
