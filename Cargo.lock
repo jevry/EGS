@@ -38,6 +38,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "egs"
+version = "0.1.0"
+dependencies = [
+ "bimap",
+ "fxhash",
+ "hashbrown",
+ "indexmap",
+ "rand",
+ "smallvec",
+ "symbol_table",
+ "symbolic_expressions",
+ "vectorize",
+]
+
+[[package]]
 name = "fxhash"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -193,21 +208,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "tap"
-version = "0.1.0"
-dependencies = [
- "bimap",
- "fxhash",
- "hashbrown",
- "indexmap",
- "rand",
- "smallvec",
- "symbol_table",
- "symbolic_expressions",
- "vectorize",
 ]
 
 [[package]]

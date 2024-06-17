@@ -1,10 +1,17 @@
-
-
-
-
-
-use std::default;
-use std::vec;
+/*
+ * egraph.rs
+ * -------------------------
+ * Author  : Kieran van Gelder
+ * Id      : 14033623
+ * Date    : 2024
+ * Version : 0.1
+ * -------------------------
+ * Egraphs itself, the bulk of the code.
+ * to improve readability the functions of
+ * the egraph struct are seperated in 3 impl
+ * blocks. the first covers; basic functionality,
+ * unioning, rebuilding and term insertion.
+ */
 
 use symbolic_expressions::Sexp;
 use crate::Id;
@@ -14,9 +21,10 @@ use crate::EClass;
 use crate::mstr;
 use crate::pattern::{Pattern, Rule};
 use indexmap::IndexSet;
-use bimap::BiMap;
 
-//we use hasmap instead of indexmap because indexmaps are more deterministic and easier to debug
+
+//we use indexmap instead of hashmap because indexmaps
+//are more deterministic and easier to debug
 pub(crate) type BuildHasher = fxhash::FxBuildHasher;
 pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
 
@@ -185,8 +193,8 @@ impl EGraph{
         to.nodes = Vec::<Enode>::new();
         // recanonize all nodes in memo.
         for t in &mut temp{
-            if let Some(mut tid) = self.memo.get(t){
-                let mut tid = *tid;
+            if let Some(tid) = self.memo.get(t){
+                let tid = *tid;
                 let tid = self.find_mut(tid);
                 self.memo.swap_remove(t);
                 let t = self.canonicalize_args(t);
@@ -240,7 +248,7 @@ impl EGraph{
         // now we need to discover possible new congruence equalities in the parent nodes.
         // we do this by building up a parent hash to see if any new terms are generated.
         let mut new_parents = bimap::BiMap::<Enode, Id>::new();
-        for (mut t,t_id) in tofix {
+        for (t,t_id) in tofix {
             let t_id = self.find_mut(t_id);
             print!("checking {:?}, {:?}\n", t, t_id);
             if let Some(n_id) = new_parents.get_by_left(&t) {
@@ -454,22 +462,18 @@ impl EGraph{
             let mut str = format!("({}", &n.head);
             let mut eval = true;
             for arg in n.args{
-                let c_root_id = self.find(arg);
-                if let Some(c) = self.get_eclass_cpy(c_root_id){
-                    if let Some((res, s)) = self.extract(&next_visited, arg, cost_function){
-                        cost += res;
-                        str.push_str(&format!(" {}", s));
-                    } else{
-                        eval = false;
-                        continue;
-                    }
+                if let Some((res, s)) = self.extract(&next_visited, arg, cost_function){
+                    cost += res;
+                    str.push_str(&format!(" {}", s));
+                } else{
+                    eval = false;
+                    continue;
                 }
             }
             if eval{
                 evaluation.push((cost, format!("{})", str)));
             }
         }
-        
         if let Some(tn) = evaluation.iter().min_by_key(|d|d.0){
             return Some(tn.clone());
         }

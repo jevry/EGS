@@ -1,8 +1,16 @@
+/*
+ * eclass.rs
+ * -------------------------
+ * Author  : Kieran van Gelder
+ * Id      : 14033623
+ * Date    : 2024
+ * Version : 0.1
+ * -------------------------
+ * the eclass struct
+ * 
+ */
 use crate::Id;
 use crate::Enode;
-
-
-
 
 #[derive(Clone, Debug)]
 pub struct EClass {
@@ -21,7 +29,7 @@ impl EClass {
     }
 
     pub fn empty() -> EClass{
-        let mut termvec = Vec::<Enode>::new();
+        let termvec = Vec::<Enode>::new();
         let res = EClass {
             nodes: termvec,
             parents: Vec::<(Enode, Id)>::new()

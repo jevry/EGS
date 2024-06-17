@@ -1,9 +1,15 @@
-
+/*
+ * enode.rs
+ * -------------------------
+ * Author  : Kieran van Gelder
+ * Id      : 14033623
+ * Date    : 2024
+ * Version : 0.1
+ * -------------------------
+ * the terms we use inside of the egraph, currently only supports Symbolic expressions
+ * 
+ */
 use crate::id::Id;
-
-//the terms we use inside of the egraph, currently only supports Symbolic expressions
-//though in theory it can support other data as well.
-
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Enode {
@@ -19,7 +25,6 @@ impl Enode {
         return test;
     }
 }
-
 
 impl Enode {
     pub fn len(&self)-> usize {

@@ -1,5 +1,5 @@
 [package]
-name = "tap" #Tree-Automata Prototype
+name = "egs" #egraphs simple
 version = "0.1.0"
 edition = "2021"
 

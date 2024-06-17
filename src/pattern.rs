@@ -1,11 +1,22 @@
-//pattern
-//used for pattern matching
+/*
+ * pattern.rs
+ * -------------------------
+ * Author  : Kieran van Gelder
+ * Id      : 14033623
+ * Date    : 2024
+ * Version : 0.1
+ * -------------------------
+ * used to create patterns and rules
+ * patterns and rules are used to match and insert patterns into the egraph
+ * 
+ */
 
 use std::fs::read_to_string;
 use symbolic_expressions::parser::parse_str;
 use symbolic_expressions::Sexp;
 use crate::mstr;
 
+//Pattern, which is either a variable (storing only the var name) or a term
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub enum Pattern {
     PatVar(String),
@@ -13,7 +24,7 @@ pub enum Pattern {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Rule {
+pub struct Rule {
     pub lhs: Pattern,
     pub rhs: Pattern
 }
@@ -44,6 +55,7 @@ pub fn new_pattern(sexpr: Sexp) -> Option<Pattern>{
     return None;
 }
 impl Rule{
+    //build a rule from 2 sexps
     pub fn new_rule(lhs: Sexp, rhs: Sexp) -> Option<Rule>{
         if let Some(lhs) = new_pattern(lhs){
             if let Some(rhs) = new_pattern(rhs){
@@ -55,7 +67,7 @@ impl Rule{
     }
 }
 
-
+//read and parse a file into a vec of rules
 pub fn read_ruleset(filepath: &str) -> Vec::<Rule> {
     let mut res = Vec::<Rule>::new();
     for line in read_to_string(filepath).unwrap().lines() {
