@@ -1,6 +1,6 @@
-# the example ruleset
-# empty lines, lines without '->' and lines starting with '#' get ignored
-# any placeholder variables are denoted with a 'P_'
+# same as ruleset A with a few additions
+# this amount of rules causes an exponential (infinite?) growth of the egraph
+# applying this ruleset to example.txt causes a egraph with 50+ eclasses
 
 #strength reduction
 (* P_x 2) -> (<< P_x 1)
@@ -17,6 +17,9 @@
 #associativity with division
 (/ (* P_x P_y) P_z) -> (* P_x (/ P_y P_z))
 (/ (* P_x P_y) P_z) -> (* P_y (/ P_x P_z))
+
+(* P_x (/ P_y 1)) -> (* P_x P_y)
+(* P_x P_y) -> (* P_x (/ P_y 1))
 
 #simplification rules
 (/ P_c P_c) -> 1

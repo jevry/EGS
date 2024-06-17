@@ -306,6 +306,14 @@ mod tests {
     const R_A: &str = "src/rulesets/rulesetA.txt";
     const R_ZEROS: &str = "src/rulesets/recursive_rule.txt"; 
 
+    #[test] //proof that commutivity works
+    fn extract_commutivity(){
+        let filepath = &format!("{PATH}ints/mult.txt");
+        let rulepath = &format!("src/rulesets/commutivity_test.txt");
+        let iter = 1;
+        rewrite_extract(filepath, rulepath, iter);
+    }
+
     #[test] //proof that multiple rewrites work
     fn extract_chain(){
         //chain is deliberately built to require 4 iterations to find the
@@ -341,7 +349,7 @@ mod tests {
     fn extract_example(){
         let filepath = &format!("{PATH}{INTS}");
         let rulepath = &format!("{R_A}");
-        let iter = 2;
+        let iter = 3;
         rewrite_extract(filepath, rulepath, iter);
     }
 
@@ -360,7 +368,7 @@ mod tests {
         g.print();
         
 
-        if let Some(str) =  g.extract_shortest(root_id){
+        if let Some(str) =  g.extract_logical(root_id){
             if let Ok(res) = parser::parse_str(&str){
                 pretty_print(&res, 10);
             }

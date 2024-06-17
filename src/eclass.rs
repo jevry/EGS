@@ -19,4 +19,13 @@ impl EClass {
         };
         return res;
     }
+
+    pub fn empty() -> EClass{
+        let mut termvec = Vec::<Enode>::new();
+        let res = EClass {
+            nodes: termvec,
+            parents: Vec::<(Enode, Id)>::new()
+        };
+        return res;
+    }
 }

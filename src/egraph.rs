@@ -87,19 +87,22 @@ impl EGraph{
     // Checks if 2 given terms are in the same class.
     // Panics if either of the terms aren't present in the entire egraph.
     pub fn in_same_class(&self, t1: &Enode, t2: &Enode) -> bool{
-        let (_, id1) = self.memo.get_key_value(t1).unwrap();
-        let (_, id2) = self.memo.get_key_value(t2).unwrap();
-        return self.unionfind.in_same_set(*id1, *id2);
+        if let Some(id1) = self.memo.get(t1){
+            if let Some(id2) = self.memo.get(t2){
+                return self.unionfind.in_same_set(*id1, *id2);
+            }
+        }
+        return false
     }
 
     // canonicalizes the args of a given term
-    pub fn canonicalize_args(&self, term: &mut Enode) -> Enode{
-        let mut new = Vec::<Id>::new();
+    pub fn canonicalize_args(&self, term: &Enode) -> Enode{
+        let mut new = term.clone();
+        new.args = Vec::<Id>::new();
         for i in &term.args{
-            new.push(self.unionfind.find(i.clone()));
+            new.args.push(self.unionfind.find(i.clone()));
         }
-        term.args = new;
-        return term.clone();
+        return new;
     }
 
     //finds the corresponding Eclass Id of a given enode
@@ -107,22 +110,43 @@ impl EGraph{
     //NOTE: Currently overcomplicated because canonicalize_args
     //doesnt properly update the egraph, as a result there is no garuantee wheter
     //the node is stored canonicalized or not
-    pub fn find_eclass(&self, enode: &mut Enode) -> Option<Id>{
+    pub fn lookup(&self, enode: &Enode) -> Option<Id>{
         if let Some(id) = self.memo.get(enode){
             return Some(self.find(*id));
         }
-        self.canonicalize_args(enode);
-        if let Some(id) = self.memo.get(enode){
+        let enode = self.canonicalize_args(enode);
+        if let Some(id) = self.memo.get(&enode){
             return Some(self.find(*id));
+        }
+        //if class isnt found in memo, proceed the task of
+        //checking in every eclass
+        for (cid, cls) in &self.classes{
+            for n in &cls.nodes{
+                let n = self.canonicalize_args(n);
+                if n == enode{
+                    return Some(*cid);
+                }
+            }
+        }
+        return None;
+    }
+
+    pub fn lookup_mut(&mut self, enode: &mut Enode) -> Option<Id>{
+        if let Some(id) = self.memo.get(enode){
+            return Some(self.find_mut(*id));
+        }
+        let enode = self.canonicalize_args(enode);
+        if let Some(id) = self.memo.get(&enode){
+            return Some(self.find_mut(*id));
         }
         return None;
     }
 
     // Push a potentially new eclass to the graph, then return Id
     pub fn push_eclass(&mut self, enode: &mut Enode) -> Id{
-        let id = self.find_eclass(enode);
-        if id.is_some(){ //term already in the graph
-            return id.unwrap();
+        let id = self.lookup_mut(enode);
+        if let Some(id) = id{ //term already in the graph
+            return self.find_mut(id);
         }
         let id = self.unionfind.new_set();
         let eclass = EClass::new(enode.clone());
@@ -142,8 +166,7 @@ impl EGraph{
     //returns None if the 2 classes are already in the same class
     pub fn union(&mut self, id1: Id, id2: Id) -> Option<Id> {
         let (id1, id2) = (self.find_mut(id1), self.find_mut(id2));
-        if id1 == id2{ print!("!!!failed union!!!\n\n"); return None }
-        print!("---succesfull union---\n\n");
+        if id1 == id2{return None }
 
         let id3 = self.unionfind.union(id1, id2);
         self.dirty_unions.push(id3); // id3 will need it's parents processed in rebuild!
@@ -166,7 +189,7 @@ impl EGraph{
                 let mut tid = *tid;
                 let tid = self.find_mut(tid);
                 self.memo.swap_remove(t);
-                self.canonicalize_args(t);
+                let t = self.canonicalize_args(t);
                 self.memo.insert(t.clone(), tid);
                 to.nodes.push(t.clone());
             }
@@ -180,49 +203,54 @@ impl EGraph{
 
 
     fn repair(&mut self, id:Id){
-        //clone the entire eclass, extremely inefficient but rust refuses to play nice otherwise
-        let id = self.find(id);
-        let mut new_cls = self.classes.get(&id).unwrap().clone();
-        let parents = new_cls.parents.clone();
-        
+        let id = self.find_mut(id);
+        let cls = self.classes.get(&id).unwrap();
+        let parents = cls.parents.clone();
+        let nodes = cls.nodes.clone();
+        let mut new_cls = EClass::empty();
+
         let mut tofix = Vec::<(Enode, Id)>::new();
 
+        print!("\nprerepair parents {:?}\n", parents);
 
-        // print!("\nprerepair parents {:?}\n", parents);
-        new_cls.parents.clear(); //clear parents
-        
+        //canonicalize the eclass
+        for n in nodes{
+            new_cls.nodes.push(self.canonicalize_args(&n));
+        }
+
+
         //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
         for (mut t, t_id) in parents{
             if let Some(old_parent_id) = self.memo.swap_remove(&t){ // the parent should be updated to use the updated class id
-                t = self.canonicalize_args(&mut t);
-                // print!("parent located: {:?}, {:?}\n",t , &t_id);
                 let t_id = self.find_mut(t_id);
+                t = self.canonicalize_args(&mut t);
                 let new_id = self.find_mut(old_parent_id);
                 tofix.push((t.clone(), t_id));
                 self.memo.insert(t, new_id); // replace in hash cons
             } else {
                 // print!("parent relocated: {:?}, {:?}\n",t , &t_id);
-                let t_id = self.find(t_id);
+                let t_id = self.find_mut(t_id);
                 tofix.push((self.canonicalize_args(&mut t), t_id));
             } 
             
         }
-        // print!("postrepair parents {:?}\n\n", tofix);
+        print!("postrepair parents {:?}\n", tofix);
+
 
         // now we need to discover possible new congruence equalities in the parent nodes.
         // we do this by building up a parent hash to see if any new terms are generated.
         let mut new_parents = bimap::BiMap::<Enode, Id>::new();
         for (mut t,t_id) in tofix {
             let t_id = self.find_mut(t_id);
-            // print!("uchecking {:?}, {:?}\n", t, t_id);
+            print!("checking {:?}, {:?}\n", t, t_id);
             if let Some(n_id) = new_parents.get_by_left(&t) {
-                // print!("repairs: unioning {:?} and {:?}\n", t_id, n_id);
+                print!("repairs: unioning {:?} and {:?}\n", t_id, n_id);
                 self.union(t_id, *n_id);
             }
             
             new_parents.insert(t.clone(), self.find_mut(t_id));
         }
-        // print!("done\n");
+        print!("done\n\n");
         for n in new_parents{
             new_cls.parents.push(n);
         }
@@ -240,9 +268,11 @@ impl EGraph{
                 todo.insert(self.find_mut(i));
             }
             self.dirty_unions = Vec::<Id>::new();
-            for id in todo{
-                self.repair(id)
+            for id in &todo{
+                print!("initiating a rebuild on {:?}...\n", id);
+                self.repair(*id)
             }
+            self.unionfind.canonicalize();
         }
     }
 
@@ -283,19 +313,19 @@ impl EGraph{
     //if return None,       no match was found
     //if return Some{ {} }, one or more matches were found but the provided pattern has no variables
     //if return Some{d},    one or more matches were found
-    pub(crate) fn match_pattern(&self, e: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
+    pub(crate) fn match_pattern(&self, cls: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
             let mut m = IndexMap::<Pattern, Enode>::default();
-            for t in &e.nodes {
+            for t in &cls.nodes {
                 m.insert(Pattern::PatVar(s.clone()), t.clone()); //probably 1
-                if let Some(id) = self.find_eclass(&mut t.clone()) {
+                if let Some(id) = self.lookup(&mut t.clone()) {
                     sub.insert(t.clone(), id);
                 } else {panic!("failed to find eclass {:?}\n", t)}
             }
             return Some(m);
         }
         else if let Pattern::PatTerm(p_head, p_args) = p {
-            for t in &e.nodes{ //for each node in the eclass
+            for t in &cls.nodes{ //for each node in the eclass
                 if t.head != *p_head || t.len() != p_args.len(){ //no match
                     continue;
                 }
@@ -394,12 +424,8 @@ impl EGraph{
         for r in rs{
             edits += self.rewrite_lhs_to_rhs(r);
 
-            print!("\n---STARTING REPAIRS\n laundry: {:?}\n", self.dirty_unions);
             self.rebuild();
-            print!("---FINISHING REPAIRS\n\n");
-            print!("---RESULT:\n");
-            self.print();
-            // print!("okay\n\n");
+
         }
         // print!("done editing\n\n\n");
         return edits;
@@ -413,9 +439,6 @@ impl EGraph{
 impl EGraph{
     
     //depth first extract with a visited list to prevent infinitely looping
-    //the visited list is just to keep track what each "line" of extract has visited.
-    //an individual line can never visit the same eclass twice
-    //though a splitted line might
     pub fn extract(&self, visited: &Vec<Id>, cid: Id, cost_function: &dyn Fn(&String) -> i32) -> Option<(i32, String)> {
         let cid = self.find(cid);
         let class = self.get_eclass(&cid).unwrap();
@@ -423,15 +446,12 @@ impl EGraph{
         let mut next_visited = visited.clone();
         next_visited.push(cid);
 
+        if visited.contains(&cid){
+            return None;
+        }
         for n in class.nodes.clone(){
             let mut cost = cost_function(&n.head);
             let mut str = format!("({}", &n.head);
-            
-            if let Some(cid_of_node) = self.find_eclass(&mut n.clone()){
-                if visited.contains(&cid_of_node){
-                    continue;
-                }
-            }
             let mut eval = true;
             for arg in n.args{
                 let c_root_id = self.find(arg);
@@ -460,9 +480,19 @@ impl EGraph{
     //an example of an extraction function
     //root_id is the id of the eclass you want to start the extraction from
     pub fn extract_shortest(&self, root_id: Id) -> Option<String>{
-        //canonicalize the id of the root eclass
-        let canonical_root_id = self.find(root_id);
         let cost_function= &ret_1;
+        return self.extract_best(root_id, cost_function)
+    }
+
+    //an example of an extraction function
+    //root_id is the id of the eclass you want to start the extraction from
+    pub fn extract_logical(&self, root_id: Id) -> Option<String>{
+        let cost_function= &ret_logical;
+        return self.extract_best(root_id, cost_function)
+    }
+
+    pub fn extract_best(&self, root_id: Id, cost_function: &dyn Fn(&String) -> i32) -> Option<String>{
+        let canonical_root_id = self.find(root_id);
         let visited = Vec::<Id>::default();
         if let Some((_, res)) = self.extract(&visited, canonical_root_id, cost_function){
             return Some(res);
