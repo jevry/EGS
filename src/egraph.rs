@@ -255,9 +255,9 @@ impl EGraph{
     ///repairs the eclass of a given id
     fn repair(&mut self, id:Id){
         let id = self.find_mut(id);
-        let cls = self.classes.get(&id).unwrap();
-        let old_parents = cls.parents.clone();
-        let old_nodes = cls.nodes.clone();
+        let old_cls = self.classes.get(&id).unwrap();
+        let old_parents = old_cls.parents.clone();
+        let old_nodes = old_cls.nodes.clone();
         let mut new_cls = EClass::empty();
 
         //canonicalize the eclass
@@ -493,7 +493,6 @@ impl EGraph{
         }
         for matches in matchvec {
             if matches.is_some() {
-                print!("rewriting matches: {:?}\n\n\n", matches);
                 let translator = matches.unwrap();
                 if let Some(id1) =  self.instantiate(lhs.clone(), &translator,&bufdict){
                     if let Some(id2) =  self.instantiate(rhs.clone(), &translator,&bufdict){
@@ -514,7 +513,6 @@ impl EGraph{
     pub fn rewrite_ruleset(&mut self, rs:&Vec<Rule>)-> i32{
         let mut edits = 0;
         for r in rs{
-            print!("rewrite:\n");
             edits += self.rewrite_lhs_to_rhs(r);
             self.rebuild();
         }
