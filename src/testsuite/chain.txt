@@ -1,5 +1,5 @@
-#meant to be used with the chain rule, specifically designed
-#to rewrite as slowly as possible this is usefull to check multiple rewrites as
-#it is suprisingly often the case that 1 rewrite already finds the optimal result
-
 (a (a a))
+
+meant to be used with the chain rule, specifically designed
+to rewrite as slowly as possible this is usefull to check multiple rewrites as
+it is suprisingly often the case that 1 rewrite already finds the optimal result

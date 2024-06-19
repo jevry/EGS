@@ -46,6 +46,8 @@ pub use egraph::EGraph;
 mod tests {
     use super::*; //allows this module to use previous scope
     use egraph::EGraph;
+
+
     ///example of unionfind.rs
     #[test]
     fn union_find() {
@@ -88,6 +90,8 @@ mod tests {
     use std::fs::read_to_string;
     use symbolic_expressions::parser::parse_str;
     use crate::pattern::Rule;
+
+    ///example of pattern.rs
     #[test]
     fn construct_rule(){
         static PATH: &str = "src/rulesets/";
@@ -302,6 +306,7 @@ mod tests {
         let rulepath = &format!("src/rulesets/chain_ruleset.txt");
         let iter = 4;
         let res = rewrite_extract(filepath, rulepath, iter, false);
+        print!("{:?}\n",res);
         assert!(parser::parse_str("e").unwrap() == res);
     }
 
@@ -369,6 +374,6 @@ mod tests {
         } else{
             print!("\nFailure to find extractable sexpr\n");
         }
-        panic!("!!!extract or parsing of result failed!!!\n\n");
+        panic!("!!!parsing of result failed!!!\n\n");
     }
 }
