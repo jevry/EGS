@@ -5,7 +5,7 @@
 # affected by the commutativity rules given.
 
 #commutativity
-# (+ P_x P_y) -> (+ P_y P_x)
+(+ P_x P_y) -> (+ P_y P_x)
 
 #peano stuff
 (+ (succ P_x) P_y) -> (+ P_x (succ P_y))

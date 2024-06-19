@@ -359,6 +359,7 @@ impl EGraph{
                     sub.insert(t.clone(), id);
                 } else {panic!("failed to find eclass {:?}\n", t)}
             }
+            print!("matched var: {:?}\n", m);
             return Some(m);
         }
         else if let Pattern::PatTerm(p_head, p_args) = p {
@@ -367,24 +368,29 @@ impl EGraph{
                     continue;
                 }
                 else { //heads the same, check kids
-                    let mut res = Vec::<IndexMap<Pattern, Enode>>::new();
+                    let mut subres = Vec::<IndexMap<Pattern, Enode>>::new();
                     let mut matching_children = 0;
 
+
                     for (t1, p1) in t.args.iter().zip(p_args){ //for each arg in the term
+
                         let new = self.find(*t1);
                         let c = self.get_eclass_cpy(new).unwrap(); //derive eclass from t.arg
                         let d = self.match_pattern(&c,p1, sub);
                         if let Some(d) = d {
-                            res.push(d);
+                            subres.push(d);
                             matching_children +=1;
                         }
                     }
                     if matching_children == t.len(){
-                        return EGraph::merge_consistent( res );
+                        // print!("  success\n\n");
+                        return EGraph::merge_consistent( subres );
                     }
+                // print!("  no success\n")
                 }
             }
         }
+        // print!("  failed match\n\n");
         return None;
     }
 
@@ -447,10 +453,16 @@ impl EGraph{
         let mut matchvec = Vec::<Option<IndexMap<Pattern, Enode>>>::new();
         for (_, cls) in &self.classes{
             let matches =  self.match_pattern(&cls, &lhs, &mut bufdict);
+            if matches.is_some(){
+                print!("\nsuccesfull match:\n");
+                print!("  class =\n  {:?}\n", cls.nodes);
+                print!("  pat =\n  {:?}\n\n", lhs);
+            }
             matchvec.push(matches);
         }
         for matches in matchvec {
             if matches.is_some() {
+                print!("rewriting matches: {:?}\n\n\n", matches);
                 let translator = matches.unwrap();
                 if let Some(id1) =  self.instantiate(lhs.clone(), &translator,&bufdict){
                     if let Some(id2) =  self.instantiate(rhs.clone(), &translator,&bufdict){
@@ -471,20 +483,9 @@ impl EGraph{
     pub fn rewrite_ruleset(&mut self, rs:&Vec<Rule>)-> i32{
         let mut edits = 0;
         for r in rs{
+            print!("rewrite:\n");
             edits += self.rewrite_lhs_to_rhs(r);
             self.rebuild();
-
-            if self.congruent_invariant(){
-                print!("is congruent after rebuild\n");
-            } else{
-                print!("is not congruent after rebuild\n")
-            }
-
-            if self.canonical_invariant(){
-                print!("is canonical after rebuild\n\n");
-            } else{
-                print!("is not canonical after rebuild\n\n")
-            }
         }
         return edits;
     }
