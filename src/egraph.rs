@@ -162,6 +162,19 @@ impl EGraph{
         return new;
     }
 
+    ///canonicalizes an enode, updates its memo entry, and returns it
+    ///does not update the eclasses
+    fn canonicalize_in_memo(&mut self, n: &Enode) -> Enode{
+        if let Some(old_cid) = self.memo.swap_remove(n){
+            let new_cid = self.find_mut(old_cid);
+            let newn = self.canonicalize_args(n);
+            self.memo.insert(newn.clone(), new_cid);
+            return newn;
+        } else{
+            return self.canonicalize_args(n);
+        }
+    }
+
     ///finds the corresponding Eclass Id of a given enode
     ///returns None if it cant find the Eclass.
     pub fn lookup(&self, enode: &Enode) -> Option<Id>{
@@ -239,19 +252,7 @@ impl EGraph{
     }
 
 
-    ///canonicalizes an enode, updates its memo entry, and returns it
-    ///does not update the eclasses
-    fn canonicalize_in_memo(&mut self, n: &Enode) -> Enode{
-        if let Some(old_cid) = self.memo.swap_remove(n){
-            let new_cid = self.find_mut(old_cid);
-            let newn = self.canonicalize_args(n);
-            self.memo.insert(newn.clone(), new_cid);
-            return newn;
-        } else{
-            return self.canonicalize_args(n);
-        }
-    }
-
+    ///repairs the eclass of a given id
     fn repair(&mut self, id:Id){
         let id = self.find_mut(id);
         let cls = self.classes.get(&id).unwrap();
@@ -359,10 +360,10 @@ impl EGraph{
                     sub.insert(t.clone(), id);
                 } else {panic!("failed to find eclass {:?}\n", t)}
             }
-            print!("matched var: {:?}\n", m);
             return Some(m);
         }
         else if let Pattern::PatTerm(p_head, p_args) = p {
+            //returns the first found matching term
             for t in &cls.nodes{ //for each node in the eclass
                 if t.head != *p_head || t.len() != p_args.len(){ //no match
                     continue;
@@ -370,7 +371,6 @@ impl EGraph{
                 else { //heads the same, check kids
                     let mut subres = Vec::<IndexMap<Pattern, Enode>>::new();
                     let mut matching_children = 0;
-
 
                     for (t1, p1) in t.args.iter().zip(p_args){ //for each arg in the term
 
@@ -383,14 +383,49 @@ impl EGraph{
                         }
                     }
                     if matching_children == t.len(){
-                        // print!("  success\n\n");
                         return EGraph::merge_consistent( subres );
                     }
-                // print!("  no success\n")
                 }
             }
         }
-        // print!("  failed match\n\n");
+        return None;
+    }
+
+    /// same as match_pattern but only matches 1 single enode.
+    /// this is a workaround to a niche case where 2 enodes in a eclass match, only the first enode match is returned.
+    /// this results in a possibility where not all matches are returned.
+    /// when this happens the optimal rewrite can fail to be inserted into the egraph.
+    pub(crate) fn match_pattern_with_enode(&self, n: &Enode, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
+        if let Pattern::PatVar(s) = p {
+        let mut m = IndexMap::<Pattern, Enode>::default();
+            m.insert(Pattern::PatVar(s.clone()), n.clone()); //probably 1
+            if let Some(id) = self.lookup(&mut n.clone()) {
+                sub.insert(n.clone(), id);
+            } else {panic!("failed to find eclass {:?}\n", n)}
+        return Some(m);
+        }
+        else if let Pattern::PatTerm(p_head, p_args) = p {
+            //returns the first found matching term
+            if n.head != *p_head || n.len() != p_args.len(){ //no match
+                return None;
+            }
+            else { //heads the same, check kids
+                let mut subres = Vec::<IndexMap<Pattern, Enode>>::new();
+                let mut matching_children = 0;
+                for (t1, p1) in n.args.iter().zip(p_args){ //for each arg in the term
+                    let new = self.find(*t1);
+                    let c = self.get_eclass_cpy(new).unwrap(); //derive eclass from t.arg
+                    let d = self.match_pattern(&c,p1, sub);
+                    if let Some(d) = d {
+                        subres.push(d);
+                        matching_children +=1;
+                    }
+                }
+                if matching_children == n.len(){
+                    return EGraph::merge_consistent( subres );
+                }
+            }
+        }
         return None;
     }
 
@@ -452,13 +487,9 @@ impl EGraph{
         let mut edits = 0; //used for statistics
         let mut matchvec = Vec::<Option<IndexMap<Pattern, Enode>>>::new();
         for (_, cls) in &self.classes{
-            let matches =  self.match_pattern(&cls, &lhs, &mut bufdict);
-            if matches.is_some(){
-                print!("\nsuccesfull match:\n");
-                print!("  class =\n  {:?}\n", cls.nodes);
-                print!("  pat =\n  {:?}\n\n", lhs);
+            for n in &cls.nodes{
+                matchvec.push(self.match_pattern_with_enode(&n, &lhs, &mut bufdict));
             }
-            matchvec.push(matches);
         }
         for matches in matchvec {
             if matches.is_some() {
