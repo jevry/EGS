@@ -1,3 +1,5 @@
+use indexmap::IndexSet;
+
 /*
  * eclass.rs
  * -------------------------
@@ -14,13 +16,13 @@ use crate::Enode;
 
 #[derive(Clone, Debug)]
 pub struct EClass {
-    pub nodes: Vec<Enode>, //Nodes part of this Eclass
+    pub nodes: IndexSet<Enode>, //Nodes part of this Eclass
     pub parents: Vec::<(Enode, Id)>  //Parent Eclasses that point towards this Eclass
 }
 impl EClass {
     pub fn new(node: Enode) -> EClass{
-        let mut termvec = Vec::<Enode>::new();
-        termvec.push(node);
+        let mut termvec = IndexSet::<Enode>::new();
+        termvec.insert(node);
         let res = EClass {
             nodes: termvec,
             parents: Vec::<(Enode, Id)>::new()
@@ -29,7 +31,7 @@ impl EClass {
     }
 
     pub fn empty() -> EClass{
-        let termvec = Vec::<Enode>::new();
+        let termvec = IndexSet::<Enode>::new();
         let res = EClass {
             nodes: termvec,
             parents: Vec::<(Enode, Id)>::new()

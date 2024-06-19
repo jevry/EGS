@@ -16,21 +16,22 @@ use symbolic_expressions::parser::parse_str;
 use symbolic_expressions::Sexp;
 use crate::mstr;
 
-//Pattern, which is either a variable (storing only the var name) or a term
+///Pattern, which is either a patvar(string) or a patterm (string, Vec<Box<Pattern)
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub enum Pattern {
     PatVar(String),
     PatTerm(String, Vec<Box<Pattern>>),
 }
 
+/// 2 patterns stored together
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub lhs: Pattern,
     pub rhs: Pattern
 }
 
-//build a new pattern from a given Sexp
-//variables must start with P_ or they will be taken as consts
+///build a new pattern from a given Sexp
+///variables must start with 'P_' or they will be taken as consts
 pub fn new_pattern(sexpr: Sexp) -> Option<Pattern>{
     if let Ok(l) = sexpr.list(){
         let mut vec = Vec::<Box<Pattern>>::new();
@@ -55,7 +56,7 @@ pub fn new_pattern(sexpr: Sexp) -> Option<Pattern>{
     return None;
 }
 impl Rule{
-    //build a rule from 2 sexps
+    ///build a rule from 2 sexps
     pub fn new_rule(lhs: Sexp, rhs: Sexp) -> Option<Rule>{
         if let Some(lhs) = new_pattern(lhs){
             if let Some(rhs) = new_pattern(rhs){
@@ -67,7 +68,7 @@ impl Rule{
     }
 }
 
-//read and parse a file into a vec of rules
+///read and parse a file into a vec of rules
 pub fn read_ruleset(filepath: &str) -> Vec::<Rule> {
     let mut res = Vec::<Rule>::new();
     for line in read_to_string(filepath).unwrap().lines() {

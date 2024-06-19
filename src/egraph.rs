@@ -14,6 +14,7 @@
  */
 
 use symbolic_expressions::Sexp;
+use crate::itoid;
 use crate::Id;
 use crate::Enode;
 use crate::UnionFind;
@@ -21,7 +22,7 @@ use crate::EClass;
 use crate::mstr;
 use crate::pattern::{Pattern, Rule};
 use indexmap::IndexSet;
-
+use crate::util::has_unique_elements;
 
 //we use indexmap instead of hashmap because indexmaps
 //are more deterministic and easier to debug
@@ -39,6 +40,7 @@ pub struct EGraph{
     dirty_unions: Vec<Id>,
 }
 impl EGraph{
+    /// create a new empty egraph
     pub fn new() -> EGraph{
         let g = EGraph{
             unionfind:    UnionFind::default(),
@@ -49,6 +51,53 @@ impl EGraph{
         return g;
     }
 
+    ///debugging: return a list of all enodes in the egraph
+    fn enodes(&self) -> Vec<Enode>{
+        let mut r = Vec::<Enode>::new();
+        for (_, cls) in &self.classes{
+            r.extend(&mut cls.nodes.clone().into_iter());
+        }
+        return r;
+    }
+
+    ///debugging: returns wheter the egraph is currently congruent or not
+    ///returns false if not congruent
+    pub fn congruent_invariant(&self) -> bool{
+        let nodes = self.enodes();
+        return has_unique_elements(nodes);
+    }
+
+    pub fn canonical_invariant(&self) -> bool{
+        let nodes = self.enodes();
+        for i in &nodes{
+            let ci = self.canonicalize_args(&i);
+            if ci != *i{
+                return false
+            }
+        }
+        return true
+    }
+
+    ///debugging: size of unionfind
+    pub fn uf_len(&self) -> usize{
+        return self.unionfind.len()
+    }
+
+    ///debugging: n of enodes
+    pub fn n_enodes(&self) ->usize{
+        let mut r = 0;
+        for (_, cls) in &self.classes{
+            r+=cls.nodes.len();
+        }
+        return r;
+    }
+
+    ///debugging: n of eclasses
+    pub fn n_eclasses(&self) ->usize{
+        return self.classes.len();
+    }
+
+    /// print out the egraph
     pub fn print(&self){
         print!("{:?}\n", self.unionfind);
         print!("memo\n");
@@ -66,11 +115,11 @@ impl EGraph{
         print!("dirty_unions {:?}\n", self.dirty_unions);
     }
 
-    //return the eclass of a given id
+    ///return the eclass of a given id
     pub fn get_eclass(&self, id: &Id) -> Option<&EClass>{
         return self.classes.get(id);
     }
-    //return a copy of the eclass of a given id
+    ///return a copy of the eclass of a given id
     pub fn get_eclass_cpy(&self, id: Id) -> Option<EClass>{
         if let Some(c) = self.classes.get(&id){
             return Some(c.clone());
@@ -82,18 +131,18 @@ impl EGraph{
 
 //basic egraph manipulation
 impl EGraph{
-    //returns the canonical id and updates it for the given id
+    ///returns the canonical id and updates it for the given id
     pub fn find_mut(&mut self, id:Id)-> Id{
         return self.unionfind.find_mut(id);
     }
 
-    //returns the canonical id
+    ///returns the canonical id
     pub fn find(&self, id:Id)-> Id{
         return self.unionfind.find(id);
     }
 
-    // Checks if 2 given terms are in the same class.
-    // Panics if either of the terms aren't present in the entire egraph.
+    /// Checks if 2 given terms are in the same class.
+    /// Panics if either of the terms aren't present in the entire egraph.
     pub fn in_same_class(&self, t1: &Enode, t2: &Enode) -> bool{
         if let Some(id1) = self.memo.get(t1){
             if let Some(id2) = self.memo.get(t2){
@@ -103,7 +152,7 @@ impl EGraph{
         return false
     }
 
-    // canonicalizes the args of a given term
+    /// canonicalizes the args of a given term
     pub fn canonicalize_args(&self, term: &Enode) -> Enode{
         let mut new = term.clone();
         new.args = Vec::<Id>::new();
@@ -113,11 +162,8 @@ impl EGraph{
         return new;
     }
 
-    //finds the corresponding Eclass Id of a given enode
-    //returns None if it cant find the Eclass.
-    //NOTE: Currently overcomplicated because canonicalize_args
-    //doesnt properly update the egraph, as a result there is no garuantee wheter
-    //the node is stored canonicalized or not
+    ///finds the corresponding Eclass Id of a given enode
+    ///returns None if it cant find the Eclass.
     pub fn lookup(&self, enode: &Enode) -> Option<Id>{
         if let Some(id) = self.memo.get(enode){
             return Some(self.find(*id));
@@ -139,20 +185,10 @@ impl EGraph{
         return None;
     }
 
-    pub fn lookup_mut(&mut self, enode: &mut Enode) -> Option<Id>{
-        if let Some(id) = self.memo.get(enode){
-            return Some(self.find_mut(*id));
-        }
-        let enode = self.canonicalize_args(enode);
-        if let Some(id) = self.memo.get(&enode){
-            return Some(self.find_mut(*id));
-        }
-        return None;
-    }
 
-    // Push a potentially new eclass to the graph, then return Id
+    /// Push a potentially new eclass to the graph, then return Id
     pub fn push_eclass(&mut self, enode: &mut Enode) -> Id{
-        let id = self.lookup_mut(enode);
+        let id = self.lookup(enode);
         if let Some(id) = id{ //term already in the graph
             return self.find_mut(id);
         }
@@ -170,8 +206,8 @@ impl EGraph{
         return id;
     }
 
-    //unions 2 eclasses and returns the new canonical Id
-    //returns None if the 2 classes are already in the same class
+    ///unions 2 eclasses and returns the new canonical Id
+    ///returns None if the 2 classes are already in the same class
     pub fn union(&mut self, id1: Id, id2: Id) -> Option<Id> {
         let (id1, id2) = (self.find_mut(id1), self.find_mut(id2));
         if id1 == id2{return None }
@@ -189,19 +225,12 @@ impl EGraph{
         to.parents.extend(from.parents);
 
 
-        let mut temp = to.nodes.clone();
-        to.nodes = Vec::<Enode>::new();
+        let nodes_temp = to.nodes.clone();
+        to.nodes = IndexSet::<Enode>::new();
         // recanonize all nodes in memo.
-        for t in &mut temp{
-            if let Some(tid) = self.memo.get(t){
-                let tid = *tid;
-                let tid = self.find_mut(tid);
-                self.memo.swap_remove(t);
-                let t = self.canonicalize_args(t);
-                self.memo.insert(t.clone(), tid);
-                to.nodes.push(t.clone());
-            }
-            
+        for t in &mut nodes_temp.into_iter(){
+            let n = self.canonicalize_in_memo(&t);
+            to.nodes.insert(n.clone());
         }
 
         self.classes.insert(to_id, to); //replace old `to` with new `to`
@@ -210,59 +239,57 @@ impl EGraph{
     }
 
 
+    ///canonicalizes an enode, updates its memo entry, and returns it
+    ///does not update the eclasses
+    fn canonicalize_in_memo(&mut self, n: &Enode) -> Enode{
+        if let Some(old_cid) = self.memo.swap_remove(n){
+            let new_cid = self.find_mut(old_cid);
+            let newn = self.canonicalize_args(n);
+            self.memo.insert(newn.clone(), new_cid);
+            return newn;
+        } else{
+            return self.canonicalize_args(n);
+        }
+    }
+
     fn repair(&mut self, id:Id){
         let id = self.find_mut(id);
         let cls = self.classes.get(&id).unwrap();
-        let parents = cls.parents.clone();
-        let nodes = cls.nodes.clone();
+        let old_parents = cls.parents.clone();
+        let old_nodes = cls.nodes.clone();
         let mut new_cls = EClass::empty();
 
-        let mut tofix = Vec::<(Enode, Id)>::new();
-
-        print!("\nprerepair parents {:?}\n", parents);
-
         //canonicalize the eclass
-        for n in nodes{
-            new_cls.nodes.push(self.canonicalize_args(&n));
+        for n in old_nodes{
+            new_cls.nodes.insert(self.canonicalize_args(&n));
         }
-
+        let mut tofix = Vec::<(Enode, Id)>::new();
+        for n in new_cls.nodes.clone(){
+            //add own enodes to the tofix list, because this class can
+            // have become congruent with parents
+            tofix.push((n, id));
+        }
 
         //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
-        for (mut t, t_id) in parents{
-            if let Some(old_parent_id) = self.memo.swap_remove(&t){ // the parent should be updated to use the updated class id
-                let t_id = self.find_mut(t_id);
-                t = self.canonicalize_args(&mut t);
-                let new_id = self.find_mut(old_parent_id);
-                tofix.push((t.clone(), t_id));
-                self.memo.insert(t, new_id); // replace in hash cons
-            } else {
-                // print!("parent relocated: {:?}, {:?}\n",t , &t_id);
-                let t_id = self.find_mut(t_id);
-                tofix.push((self.canonicalize_args(&mut t), t_id));
-            } 
-            
+        for (t, old_cid) in old_parents{
+            let newn = self.canonicalize_in_memo(&t);
+            let new_cid = self.find_mut(old_cid);
+            tofix.push((newn, new_cid));
         }
-        print!("postrepair parents {:?}\n", tofix);
-
 
         // now we need to discover possible new congruence equalities in the parent nodes.
         // we do this by building up a parent hash to see if any new terms are generated.
-        let mut new_parents = bimap::BiMap::<Enode, Id>::new();
-        for (t,t_id) in tofix {
-            let t_id = self.find_mut(t_id);
-            print!("checking {:?}, {:?}\n", t, t_id);
-            if let Some(n_id) = new_parents.get_by_left(&t) {
-                print!("repairs: unioning {:?} and {:?}\n", t_id, n_id);
-                self.union(t_id, *n_id);
+        let mut new_parents = IndexMap::<Enode, Id>::default();
+        for (newn,new_cid) in tofix {
+
+            if let Some(n_id) = new_parents.get(&newn) {
+                self.union(new_cid, *n_id);
             }
-            
-            new_parents.insert(t.clone(), self.find_mut(t_id));
+            new_parents.insert(newn.clone(), self.find_mut(new_cid));
         }
-        print!("done\n\n");
         for n in new_parents{
             new_cls.parents.push(n);
         }
-
         self.classes.insert(id, new_cls);
     }
 
@@ -275,12 +302,14 @@ impl EGraph{
             for i in self.dirty_unions.clone(){
                 todo.insert(self.find_mut(i));
             }
+            for i in 0..self.unionfind.len(){
+                todo.insert(self.find_mut(itoid!(i)));
+            }
             self.dirty_unions = Vec::<Id>::new();
             for id in &todo{
-                print!("initiating a rebuild on {:?}...\n", id);
                 self.repair(*id)
             }
-            self.unionfind.canonicalize();
+            // self.unionfind.canonicalize();
         }
     }
 
@@ -316,11 +345,11 @@ impl EGraph{
 
 
 impl EGraph{
-    //inefficient but relatively simple pattern matching algorithm
-    //returns a "dict" that translates patterns to enodes
-    //if return None,       no match was found
-    //if return Some{ {} }, one or more matches were found but the provided pattern has no variables
-    //if return Some{d},    one or more matches were found
+    ///inefficient but relatively simple pattern matching algorithm
+    ///returns a "dict" that translates patterns to enodes
+    ///if return None,       no match was found
+    ///if return Some{ {} }, one or more matches were found but the provided pattern has no variables
+    ///if return Some{d},    one or more matches were found
     pub(crate) fn match_pattern(&self, cls: &EClass, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
             let mut m = IndexMap::<Pattern, Enode>::default();
@@ -359,7 +388,7 @@ impl EGraph{
         return None;
     }
 
-    //merge dicts and return None if a inconsistency is found
+    ///merge dicts and return None if a inconsistency is found
     fn merge_consistent(dicts: Vec<IndexMap<Pattern, Enode>>) -> Option<IndexMap<Pattern, Enode>>{
         let mut newd: IndexMap<Pattern, Enode> = IndexMap::<Pattern, Enode>::default();
         for dict in dicts {
@@ -376,30 +405,38 @@ impl EGraph{
         return Some(newd);
     }
 
-    //sub maps a VAR symbol to an Identifier in the EGraph
-    //this means that the VAR symbol comes from pattern and the ID from the EGraph
+    ///sub maps a VAR symbol to an Identifier in the EGraph
+    ///this means that the VAR symbol comes from pattern and the ID from the EGraph
     fn instantiate(&mut self, p: Pattern, translator: &IndexMap<Pattern, Enode>, sub: &IndexMap<Enode, Id>) -> Option<Id>{
         if let Pattern::PatVar(s) = p { //adding a patvar to the EG
-            let t = translator.get(&Pattern::PatVar(s.clone()));
-            let tid = sub.get(t.unwrap()); //get the appropriate ID
 
-            return Some(*tid.unwrap()); //return the appropriate ID
-
+            if let Some(t) = translator.get(&Pattern::PatVar(s.clone())){
+                let tid = sub.get(t); //get the appropriate ID
+                return Some(*tid.unwrap()); //return the appropriate ID
+            }
+            else {
+                return None;
+            }
         } else if let Pattern::PatTerm(p_head, p_args) = p {
             let mut t = Enode::new(p_head.clone()); //get term head
             for a in p_args { //get terms in p_args
                 
                 //recursive call, return val is the ID of the Enode the call added to the EGraph
-                t.args.push(self.instantiate(*a, translator, &sub).unwrap());//push that ID to our term
+                if let Some(id) = self.instantiate(*a, translator, &sub){
+                    t.args.push(id);//push that ID to our term
+                }
+                else{
+                    return None
+                }
             }
             return Some(self.push_eclass(&mut t)); //push term into EGraph
         }
         return None; //unreachable
     }
 
-    //matches the given rule.lhs once with each eclass
-    //inserts rule.rhs whereever a match is found
-    //returns the number of times a rule is succesfully applied to an eclass
+    ///matches the given rule.lhs once with each eclass
+    ///inserts rule.rhs whereever a match is found
+    ///returns the number of times a rule is succesfully applied to an eclass
     pub fn rewrite_lhs_to_rhs(&mut self, r: &Rule) -> i32{
         let mut bufdict = IndexMap::<Enode, Id>::default();
         //let mut translator = IndexMap::<Pattern, Enode>::default();
@@ -414,31 +451,43 @@ impl EGraph{
         }
         for matches in matchvec {
             if matches.is_some() {
-                edits += 1;
                 let translator = matches.unwrap();
-                let id1 =  self.instantiate(lhs.clone(), &translator,&bufdict);
-                let id2 =  self.instantiate(rhs.clone(), &translator,&bufdict);
-                self.union(id1.unwrap(), id2.unwrap());
-
+                if let Some(id1) =  self.instantiate(lhs.clone(), &translator,&bufdict){
+                    if let Some(id2) =  self.instantiate(rhs.clone(), &translator,&bufdict){
+                        if let Some(_) = self.union(id1, id2){
+                            edits += 1;
+                        }
+                    }
+                }
             }
         }
         return edits;
     }
 
-    //applies all rules in a passed ruleset to the egraph
+    ///applies all rules in a passed ruleset to the egraph.
+    ///rebuilds after every rule applucation.
+    ///note that edits dont directly correlate to how much an egraph is mutated.
+    ///this is because rebuild doesn't keep track of its edits
     pub fn rewrite_ruleset(&mut self, rs:&Vec<Rule>)-> i32{
         let mut edits = 0;
-
         for r in rs{
             edits += self.rewrite_lhs_to_rhs(r);
-
             self.rebuild();
 
+            if self.congruent_invariant(){
+                print!("is congruent after rebuild\n");
+            } else{
+                print!("is not congruent after rebuild\n")
+            }
+
+            if self.canonical_invariant(){
+                print!("is canonical after rebuild\n\n");
+            } else{
+                print!("is not canonical after rebuild\n\n")
+            }
         }
-        // print!("done editing\n\n\n");
         return edits;
     }
-
 }
 
 /* --------------------- */
@@ -446,34 +495,42 @@ impl EGraph{
 /* --------------------- */
 impl EGraph{
     
-    //depth first extract with a visited list to prevent infinitely looping
+    ///depth first extract with a visited list to prevent infinitely looping
     pub fn extract(&self, visited: &Vec<Id>, cid: Id, cost_function: &dyn Fn(&String) -> i32) -> Option<(i32, String)> {
         let cid = self.find(cid);
         let class = self.get_eclass(&cid).unwrap();
         let mut evaluation = Vec::<(i32, String)>::new();
-        let mut next_visited = visited.clone();
-        next_visited.push(cid);
-
+        
+        //if already visited, skip, otherwise add own id and continue
         if visited.contains(&cid){
             return None;
         }
+
+        let mut visited = visited.clone();
+        visited.push(cid);
+
         for n in class.nodes.clone(){
             let mut cost = cost_function(&n.head);
+            if n.len() == 0 {
+                evaluation.push((cost, n.head));
+                continue;
+            }
             let mut str = format!("({}", &n.head);
             let mut eval = true;
             for arg in n.args{
-                if let Some((res, s)) = self.extract(&next_visited, arg, cost_function){
+                if let Some((res, s)) = self.extract(&visited, arg, cost_function){
                     cost += res;
                     str.push_str(&format!(" {}", s));
                 } else{
                     eval = false;
-                    continue;
+                    break;
                 }
             }
             if eval{
                 evaluation.push((cost, format!("{})", str)));
             }
         }
+        //after evaluating each enode extract the cheapest one from the list
         if let Some(tn) = evaluation.iter().min_by_key(|d|d.0){
             return Some(tn.clone());
         }
@@ -481,20 +538,22 @@ impl EGraph{
         
     }
 
-    //an example of an extraction function
-    //root_id is the id of the eclass you want to start the extraction from
+    /// an example of an extraction function.
+    /// root_id is the id of the eclass you want to start the extraction from
     pub fn extract_shortest(&self, root_id: Id) -> Option<String>{
         let cost_function= &ret_1;
         return self.extract_best(root_id, cost_function)
     }
 
-    //an example of an extraction function
-    //root_id is the id of the eclass you want to start the extraction from
+    /// an example of an extraction function.
+    /// root_id is the id of the eclass you want to start the extraction from
     pub fn extract_logical(&self, root_id: Id) -> Option<String>{
         let cost_function= &ret_logical;
         return self.extract_best(root_id, cost_function)
     }
 
+    /// extract and retur the best sexpr from the egraph according to cost_function
+    /// returns the answer as a string
     pub fn extract_best(&self, root_id: Id, cost_function: &dyn Fn(&String) -> i32) -> Option<String>{
         let canonical_root_id = self.find(root_id);
         let visited = Vec::<Id>::default();
@@ -508,14 +567,20 @@ impl EGraph{
 
 /* --------------------- */
 //some cost function examples
-//it is reccomended to keep minimum cost at 1 to encourage short terms
 
-//always returns a cost of 1
+/// example cost_function
+/// always returns a cost of 1
 pub fn ret_1(_: &String) -> i32{
     return 1;
 }
 
-//returns a cost based on the value of the operation
+/** example cost function
+ returns a cost based on the value of the operation:
+ "+, n, <<" => 2,
+ "/" => 4,
+ "*" => 3,
+ "succ" => 0,
+ _ => 1 **/
 pub fn ret_logical(s: &String) -> i32{
     return match s.as_str(){
         "+" => 2,

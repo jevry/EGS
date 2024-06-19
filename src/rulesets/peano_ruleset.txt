@@ -1,7 +1,3 @@
-# the example ruleset
-# empty lines, lines without '->' and lines starting with '#' get ignored
-# any placeholder variables are denoted with a 'P_'
-
 # this ruleset does some peano logic to allow to simplify more stuff
 # but mainly its usefull for stresstesting because writing 3 as 3 is cheaper than as (succ(succ(succ 0)))
 
@@ -9,26 +5,9 @@
 # affected by the commutativity rules given.
 
 #commutativity
-(* P_x P_y) -> (* P_y P_x)
-(+ P_x P_y) -> (+ P_y P_x)
-
-#associativity
-(* (* P_x P_y) P_z) -> (* P_x (* P_y P_z))
-(* P_x (* P_y P_z)) -> (* (* P_x P_y) P_z)
-
-#associativity with division
-(/ (* P_x P_y) P_z) -> (* P_x (/ P_y P_z))
-
-(* P_x (/ P_y (succ 0))) -> (* P_x P_y)
-(* P_x P_y) -> (* P_x (/ P_y (succ 0)))
-
-#simplification rules
-(/ P_c P_c) -> (succ 0)
-(* (succ P_x) (succ 0)) -> (succ P_x)
+# (+ P_x P_y) -> (+ P_y P_x)
 
 #peano stuff
 (+ (succ P_x) P_y) -> (+ P_x (succ P_y))
-(+ (succ P_x) P_y) -> (+ (succ P_y) P_x)
-(+ P_x 0) -> P_x
-(+ 0 P_x) -> P_x
+(+ (succ P_x) 0) -> (succ P_x)
 

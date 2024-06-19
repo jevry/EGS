@@ -1,5 +1,4 @@
 use crate::Id;
-use crate::itoid;
 use std::fmt::Debug;
 use std::vec::Vec;
 
@@ -17,6 +16,10 @@ impl UnionFind {
         let id = Id::from(self.parents.len());
         self.parents.push(id);
         return id;
+    }
+
+    pub fn len(&self) -> usize {
+        return self.parents.len();
     }
 
     //returns whatever ID the querried item points at
@@ -58,13 +61,6 @@ impl UnionFind {
     //checks if 2 nodes are in the same set
     pub fn in_same_set(&self, id1:Id, id2:Id) -> bool {
         return self.find(id1) == self.find(id2);
-    }
-
-
-    pub fn canonicalize(&mut self){
-        for i in 0..self.parents.len() {
-            self.find_mut(itoid!(i));
-        }
     }
 
 }

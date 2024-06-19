@@ -43,3 +43,14 @@ pub fn format_pretty_string(buf: &mut String, sexp: &Sexp, width: usize, level: 
         write!(buf, "{}", sexp.to_string().trim_matches('"'))
     }
 }
+
+use std::hash::Hash;
+use hashbrown::HashSet;
+pub fn has_unique_elements<T>(iter: T) -> bool
+where
+    T: IntoIterator,
+    T::Item: Eq + Hash,
+{
+    let mut uniq = HashSet::new();
+    iter.into_iter().all(move |x| uniq.insert(x))
+}

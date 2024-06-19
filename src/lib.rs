@@ -36,30 +36,9 @@ pub use egraph::EGraph;
 
 
 
-//TODO: empty this defunct code
-pub fn rewrite_extract(filepath: &str, rulepath: &str, rewrites: u32){
-    let sexp: Sexp = parser::parse_file(filepath).unwrap();
-    let mut g = EGraph::new();
-    let root_id = g.insert_sexpr(sexp);
-    let ruleset = &read_ruleset(rulepath);
 
-    for i in 0..rewrites{
-        print!("rewrite {}\n", i);
-        g.rewrite_ruleset(ruleset);
-    }
-    print!("\n\n");
 
-    g.print();
-    
 
-    if let Some(str) =  g.extract_logical(root_id){
-        if let Ok(res) = parser::parse_str(&str){
-            pretty_print(&res, 10);
-        }
-    } else{
-        print!("\nFailure to find extractable sexpr\n");
-    }
-}
 
 //run these tests on your local machine
 //test functions
@@ -67,7 +46,7 @@ pub fn rewrite_extract(filepath: &str, rulepath: &str, rewrites: u32){
 mod tests {
     use super::*; //allows this module to use previous scope
     use egraph::EGraph;
-    //example of unionfind.rs
+    ///example of unionfind.rs
     #[test]
     fn union_find() {
         let n = 10;
@@ -109,10 +88,10 @@ mod tests {
     use std::fs::read_to_string;
     use symbolic_expressions::parser::parse_str;
     use crate::pattern::Rule;
-    #[test] //run this test function to see graph construction
+    #[test]
     fn construct_rule(){
         static PATH: &str = "src/rulesets/";
-        static FILENAME: &str = "patternB.txt";
+        static FILENAME: &str = "rulesetA.txt";
         let filepath = format!("{PATH}{FILENAME}");
 
         for line in read_to_string(filepath).unwrap().lines() {
@@ -122,7 +101,7 @@ mod tests {
                 if let Ok(lhs) = parse_str(collection[0]){
                     if let Ok(rhs) = parse_str(collection[1]){
                         let r = Rule::new_rule(lhs, rhs).unwrap();
-                        print!("{:?}\n", r.lhs);
+                        print!("{:?}  ->  ", r.lhs);
                         print!("{:?}\n", r.rhs);
                     }
                 }
@@ -140,7 +119,7 @@ mod tests {
     static PATH: &str = "src/testsuite/";
     static FILENAME: &str = "ints/example.txt";
 
-    #[test] //run this test function to see graph construction
+    #[test] ///run this test function to see graph construction
     fn egraph_construction() {
         let filepath = format!("{PATH}{FILENAME}");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -155,8 +134,8 @@ mod tests {
 
 
 
-    //run this test function to see adding a new term to a constructed graph
-    //note that doing this like this breaks the congruence invariant
+    ///run this test function to see adding a new term to a constructed graph
+    ///note that doing this like this breaks the congruence invariant
     #[test]
     fn egraph_editing() {
         let filepath = format!("{PATH}ints/mult.txt");
@@ -176,7 +155,7 @@ mod tests {
         g.print();
     }
 
-    #[test] //run this test function to see adding unioning 2 nodes
+    #[test] ///run this test function to see adding unioning 2 nodes
     fn egraph_union() {
         let filepath = format!("{PATH}ints/mult.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -193,9 +172,11 @@ mod tests {
         g.print();
     }
 
+    /*-------------------- REWRITE TESTS --------------------*/
+
     pub(crate) type BuildHasher = fxhash::FxBuildHasher;
     pub(crate) type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasher>;
-    #[test] //to test ematching
+    #[test] ///to test ematching
     fn egraph_matching() {
         let filepath = format!("{PATH}ints/const_mult.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -216,7 +197,7 @@ mod tests {
 
     }
 
-    #[test] //to test rewriting a graph once
+    #[test] ///to test rewriting a graph once
     fn egraph_rewrite() {
         let filepath = format!("{PATH}ints/mult.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -232,7 +213,10 @@ mod tests {
         g.print();
     }
 
-    #[test] //to test rewriting a graph multiple times
+    /// to test rewriting a graph multiple times
+    /// default settings will cause the egraph to saturate after the 4th rewrite
+    /// after the 5th rewrite edits will return 0 and the number of eclasses and enodes stops changing
+    #[test]
     pub fn egraph_mass_rewrite() {
         let filepath = format!("{PATH}ints/example.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -243,21 +227,26 @@ mod tests {
 
 
         let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
-        let edits = g.rewrite_ruleset(ruleset);
-
-        print!("first pass edits: {}\n", edits);
-        let edits = g.rewrite_ruleset(ruleset);
-
-        print!("second pass edits: {}\n", edits);
-        let edits = g.rewrite_ruleset(ruleset);
-        print!("third pass edits made: {}\n", edits);
-        g.rebuild();
+        let edits1 = g.rewrite_ruleset(ruleset);
+        let edits2 = g.rewrite_ruleset(ruleset);
+        let edits3 = g.rewrite_ruleset(ruleset);
+        let edits4 = g.rewrite_ruleset(ruleset);
+        let edits5 = g.rewrite_ruleset(ruleset);
         g.print();
+        print!("1st pass edits: {}\n", edits1);
+        print!("2nd pass edits: {}\n", edits2);
+        print!("3rd pass edits made: {}\n", edits3);
+        print!("4th pass edits made: {}\n", edits4);
+        print!("5th pass edits made: {}\n", edits5);
+        print!("uf_size = {}\n", g.uf_len());
+        print!("enodes = {}\n", g.n_enodes());
+        print!("eclasses = {}\n", g.n_eclasses());
+
     }
 
+    /*-------------------- EXTRACT TESTS --------------------*/
 
-
-    #[test] //rewrite a term a few times and extract some random terms from the graph
+    #[test] ///rewrite a term and extract some random terms from the graph
     pub fn extract_random_terms(){
         let filepath = format!("{PATH}ints/example.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -265,11 +254,6 @@ mod tests {
         let root_id = g.insert_sexpr(sexp);
         let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
         g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
-        g.rewrite_ruleset(ruleset);
-        g.rebuild();
         g.print();
         
         if let Some(cls) = g.get_eclass_cpy(root_id){
@@ -280,6 +264,8 @@ mod tests {
     }
 
     use rand::{thread_rng, Rng};
+    /// randomly choses what enodes to return.
+    /// is prone to overflowing the stack for large graphs with cycles
     fn extract_random(e: &EGraph, n: Enode) -> String{
         let mut rng = thread_rng();
         let mut ans = String::new();
@@ -300,25 +286,26 @@ mod tests {
     }
 
 
-    #[test] //proof that commutivity works
+    #[test] ///proof that commutivity works
     fn extract_commutivity(){
         let filepath = &format!("{PATH}ints/mult.txt");
         let rulepath = &format!("src/rulesets/commutivity_test.txt");
         let iter = 1;
-        rewrite_extract(filepath, rulepath, iter);
+        rewrite_extract(filepath, rulepath, iter, true);
     }
 
-    #[test] //proof that multiple rewrites work
+    #[test] ///proof that multiple rewrites work
     fn extract_chain(){
         //chain is deliberately built to require 4 iterations to find the
         //optimal rewrite
         let filepath = &format!("{PATH}chain.txt");
         let rulepath = &format!("src/rulesets/chain_ruleset.txt");
         let iter = 4;
-        rewrite_extract(filepath, rulepath, iter);
+        let res = rewrite_extract(filepath, rulepath, iter, false);
+        assert!(parser::parse_str("e").unwrap() == res);
     }
 
-    #[test] //extracts the best found term from a simplification ruleset
+    #[test] ///extracts the best found term from a simplification ruleset
     fn extract_zeros(){
         //(n x) -> x is the only used rule
         //for some reason it fails to finish the last simplify step
@@ -326,48 +313,62 @@ mod tests {
         let filepath = &format!("{PATH}ints/add_zeros.txt");
         let rulepath = &format!("src/rulesets/recursive_rule.txt");
         let iter = 2;
-        rewrite_extract(filepath, rulepath, iter);
+        rewrite_extract(filepath, rulepath, iter, true);
     }
 
-    #[test] //extracts the best found term from peano 2+2
+    #[test] ///extracts the best found term from peano 2+2
+    fn extract_factorial(){
+        //for some reason it finds 3+1 and fails to find 4
+        //the issue is because of something in the rebuild function
+        let filepath = &format!("{PATH}ints/factorial.txt");
+        let rulepath = &format!("src/rulesets/factorial.txt");
+        let iter = 2;
+        rewrite_extract(filepath, rulepath, iter, true);
+    }
+
+
+    #[test] ///extracts the best found term from peano 2+2
     fn extract_peano(){
         //for some reason it finds 3+1 and fails to find 4
         //the issue is because of something in the rebuild function
         let filepath = &format!("{PATH}peano/sum.txt");
         let rulepath = &format!("src/rulesets/peano_ruleset.txt");
-        let iter = 2;
-        rewrite_extract(filepath, rulepath, iter);
+        let iter = 6;
+        rewrite_extract(filepath, rulepath, iter, true);
     }
 
-    #[test] //extracts the best found term from example.txt
+    #[test] ///extracts the best found term from example.txt
     fn extract_example(){
         let filepath = &format!("{PATH}ints/example.txt");
         let rulepath = &format!("src/rulesets/rulesetA.txt");
         let iter = 3;
-        rewrite_extract(filepath, rulepath, iter);
+        let res = rewrite_extract(filepath, rulepath, iter, false);
+        assert!(parser::parse_str("a").unwrap() == res);
     }
 
-    fn rewrite_extract(filepath: &str, rulepath: &str, rewrites: u32){
+    fn rewrite_extract(filepath: &str, rulepath: &str, rewrites: u32, show_g: bool)-> Sexp{
         let sexp: Sexp = parser::parse_file(filepath).unwrap();
         let mut g = EGraph::new();
         let root_id = g.insert_sexpr(sexp);
         let ruleset = &read_ruleset(rulepath);
 
-        for i in 0..rewrites{
-            print!("rewrite {}\n", i);
+        for _ in 0..rewrites{
             g.rewrite_ruleset(ruleset);
         }
-        print!("\n\n");
 
-        g.print();
+        if show_g{
+            g.print();
+        }
         
 
         if let Some(str) =  g.extract_logical(root_id){
             if let Ok(res) = parser::parse_str(&str){
                 pretty_print(&res, 10);
+                return res
             }
         } else{
             print!("\nFailure to find extractable sexpr\n");
         }
+        panic!("!!!extract or parsing of result failed!!!\n\n");
     }
 }
