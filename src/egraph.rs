@@ -14,7 +14,6 @@
  */
 
 use symbolic_expressions::Sexp;
-use crate::itoid;
 use crate::Id;
 use crate::Enode;
 use crate::UnionFind;
