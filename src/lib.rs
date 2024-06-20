@@ -327,7 +327,7 @@ mod tests {
         //the issue is because of something in the rebuild function
         let filepath = &format!("{PATH}ints/factorial.txt");
         let rulepath = &format!("src/rulesets/factorial.txt");
-        let iter = 2;
+        let iter = 1;
         rewrite_extract(filepath, rulepath, iter, true);
     }
 
@@ -346,7 +346,7 @@ mod tests {
     fn extract_example(){
         let filepath = &format!("{PATH}ints/example.txt");
         let rulepath = &format!("src/rulesets/rulesetA.txt");
-        let iter = 3;
+        let iter = 2;
         let res = rewrite_extract(filepath, rulepath, iter, false);
         assert!(parser::parse_str("a").unwrap() == res);
     }

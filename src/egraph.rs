@@ -37,7 +37,7 @@ pub struct EGraph{
     pub(crate) unionfind:    UnionFind,
     pub(crate) memo:         IndexMap<Enode, Id>,  //memory to store future term IDs
     pub(crate) classes:      IndexMap<Id,EClass>,
-    dirty_unions: Vec<Id>,
+    clean: bool,
 }
 impl EGraph{
     /// create a new empty egraph
@@ -46,7 +46,7 @@ impl EGraph{
             unionfind:    UnionFind::default(),
             memo:         IndexMap::<Enode, Id>::default(),
             classes:      IndexMap::<Id,EClass>::default(),
-            dirty_unions: Vec::<Id>::new()
+            clean: true
         };
         return g;
     }
@@ -60,14 +60,29 @@ impl EGraph{
         return r;
     }
 
+
+    ///debugging: return a list of all enodes in the egraph
+    fn id_enode_pairs(&self) -> Vec<(Id, Enode)>{
+        let mut r = Vec::<(Id, Enode)>::new();
+        for (id, cls) in &self.classes{
+            for n in cls.nodes.clone(){
+                r.push((*id, n));
+            }
+        }
+        return r;
+    }
+
+
     ///debugging: returns wheter the egraph is currently congruent or not
     ///returns false if not congruent
-    pub fn congruent_invariant(&self) -> bool{
+    pub fn is_congruent(&self) -> bool{
         let nodes = self.enodes();
         return has_unique_elements(nodes);
     }
 
-    pub fn canonical_invariant(&self) -> bool{
+    ///debugging: returns wheter the egraph is currently canonical or not
+    ///returns false if not all enodes are canonical
+    pub fn is_canonical(&self) -> bool{
         let nodes = self.enodes();
         for i in &nodes{
             let ci = self.canonicalize_args(&i);
@@ -112,7 +127,7 @@ impl EGraph{
             }
             print!("        parents: {:?} \n\n", c.parents);
         }
-        print!("dirty_unions {:?}\n", self.dirty_unions);
+        print!("dirty_unions {:?}\n", self.clean);
     }
 
     ///return the eclass of a given id
@@ -221,12 +236,12 @@ impl EGraph{
 
     ///unions 2 eclasses and returns the new canonical Id
     ///returns None if the 2 classes are already in the same class
+    ///DOES NOT CANONICALISE INPUT IDs FOR YOU!!!
     pub fn union(&mut self, id1: Id, id2: Id) -> Option<Id> {
-        let (id1, id2) = (self.find_mut(id1), self.find_mut(id2));
         if id1 == id2{return None }
 
         let id3 = self.unionfind.union(id1, id2);
-        self.dirty_unions.push(id3); // id3 will need it's parents processed in rebuild!
+        self.clean = false;
 
 
         let (to_id, from_id) = (id1, id2);
@@ -236,91 +251,55 @@ impl EGraph{
         // move nodes and parents from eclass[`from`] to eclass[`to`]
         to.nodes.extend(from.nodes);
         to.parents.extend(from.parents);
-
-
+        
+        
         let nodes_temp = to.nodes.clone();
         to.nodes = IndexSet::<Enode>::new();
-        // recanonize all nodes in memo.
+        // recanonize all nodes in memo and cls.
         for t in &mut nodes_temp.into_iter(){
             let n = self.canonicalize_in_memo(&t);
             to.nodes.insert(n.clone());
         }
-
+        
         self.classes.insert(to_id, to); //replace old `to` with new `to`
         self.classes.swap_remove(&from_id); //remove old `from`
         return Some(id3);
     }
 
-
-    ///repairs the eclass of a given id
-    fn repair(&mut self, id:Id){
-        let id = self.find_mut(id);
-        let old_cls = self.classes.get(&id).unwrap();
-        let old_parents = old_cls.parents.clone();
-        let old_nodes = old_cls.nodes.clone();
-        let mut new_cls = EClass::empty();
-
-        //canonicalize the eclass
-        for n in old_nodes{
-            new_cls.nodes.insert(self.canonicalize_args(&n));
-        }
-        let mut tofix = Vec::<(Enode, Id)>::new();
-        for n in new_cls.nodes.clone(){
-            //add own enodes to the tofix list, because this class can
-            // have become congruent with parents
-            tofix.push((n, id));
-        }
-
-        //  for every parent, update the hash cons. We need to repair that the term has possibly a wrong id in it
-        for (t, old_cid) in old_parents{
-            let newn = self.canonicalize_in_memo(&t);
-            let new_cid = self.find_mut(old_cid);
-            tofix.push((newn, new_cid));
-        }
-
-        // now we need to discover possible new congruence equalities in the parent nodes.
-        // we do this by building up a parent hash to see if any new terms are generated.
-        let mut new_parents = IndexMap::<Enode, Id>::default();
-        for (newn,new_cid) in tofix {
-
-            if let Some(n_id) = new_parents.get(&newn) {
-                self.union(new_cid, *n_id);
+    ///forcefully restores congruence throughout the *entire* egraph
+    /// this can be done more efficiently, for example only checking eclasses that were rewritten and their parents
+    /// however this can introduce niche bugs and edgecases where not everything is correctly restored
+    fn force_fix_congruence(&mut self){
+        self.unionfind.canonicalize();
+        let l = self.id_enode_pairs();
+        let mut seen = IndexMap::<Enode, Id>::default();
+        for (id, n) in &l {
+            let n = &self.canonicalize_in_memo(n);
+            if seen.contains_key(n){
+                let id2 = seen.get(n).unwrap();
+                self.union(*id2, *id);
+                break;
             }
-            new_parents.insert(newn.clone(), self.find_mut(new_cid));
+            seen.insert(n.clone(), *id);
         }
-        for n in new_parents{
-            new_cls.parents.push(n);
-        }
-        self.classes.insert(id, new_cls);
     }
 
-    //calls repair on "duty unions"
+    //calls repair on "dirty unions"
     //which first canonicalizes some nodes in memo
     //and then checks for additional congruences that might have formed
     pub fn rebuild(&mut self){
-        while self.dirty_unions.len() > 0{
-            let mut todo = IndexSet::<Id>::new();
-            for i in self.dirty_unions.clone(){
-                todo.insert(self.find_mut(i));
-            }
-            for i in 0..self.unionfind.len(){
-                todo.insert(self.find_mut(itoid!(i)));
-            }
-            self.dirty_unions = Vec::<Id>::new();
-            for id in &todo{
-                self.repair(*id)
-            }
-            // self.unionfind.canonicalize();
+        while !self.clean{
+            self.clean = true;
+            self.force_fix_congruence();
         }
     }
 
 
     // Push a potentially new leaflet eclass to the graph, then return Id
-    pub fn leaflet(&mut self, x: String) -> Id{
+    pub fn push_leaf(&mut self, x: String) -> Id{
         let mut t = Enode::new(x);
         return self.push_eclass(&mut t);
     }
-
 
 
 
@@ -338,7 +317,7 @@ impl EGraph{
             return self.push_eclass(&mut term);
         } else { //sexp is leaflet
             let s = mstr!(f.to_string().trim_matches('"'));
-            return self.leaflet(format!("{}", s));
+            return self.push_leaf(format!("{}", s));
         }
     }
 }
@@ -496,6 +475,8 @@ impl EGraph{
                 let translator = matches.unwrap();
                 if let Some(id1) =  self.instantiate(lhs.clone(), &translator,&bufdict){
                     if let Some(id2) =  self.instantiate(rhs.clone(), &translator,&bufdict){
+                        let id1 = self.find_mut(id1);
+                        let id2 = self.find_mut(id2);
                         if let Some(_) = self.union(id1, id2){
                             edits += 1;
                         }
