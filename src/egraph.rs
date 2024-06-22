@@ -36,7 +36,7 @@ pub struct EGraph{
     pub(crate) unionfind:    UnionFind,
     pub(crate) memo:         IndexMap<Enode, Id>,  //memory to store future term IDs
     pub(crate) classes:      IndexMap<Id,EClass>,
-    clean: bool,
+    dirty_unions: Vec<Id>,
 }
 impl EGraph{
     /// create a new empty egraph
@@ -45,9 +45,18 @@ impl EGraph{
             unionfind:    UnionFind::default(),
             memo:         IndexMap::<Enode, Id>::default(),
             classes:      IndexMap::<Id,EClass>::default(),
-            clean: true
+            dirty_unions: Vec::<Id>::new(),
         };
         return g;
+    }
+
+    //return a list of the ids of all active eclasses
+    fn get_ids(&self) -> Vec<Id>{
+        let mut r = Vec::<Id>::new();
+        for (id, _) in &self.classes{
+            r.push(*id);
+        }
+        return r;
     }
 
     ///debugging: return a list of all enodes in the egraph
@@ -72,20 +81,21 @@ impl EGraph{
     }
 
 
-    ///debugging: returns wheter the egraph is currently congruent or not
-    ///returns false if not congruent
+    ///debugging: returns wheter the egraph is currently congruent or not.
+    ///returns false if not congruent.
     pub fn is_congruent(&self) -> bool{
         let nodes = self.enodes();
         return has_unique_elements(nodes);
     }
 
-    ///debugging: returns wheter the egraph is currently canonical or not
-    ///returns false if not all enodes are canonical
+    ///debugging: returns wheter the egraph is currently canonical or not.
+    ///returns false if not all enodes are canonical.
     pub fn is_canonical(&self) -> bool{
-        let nodes = self.enodes();
-        for i in &nodes{
+        let nodes = self.memo.iter();
+        for (i, _) in nodes{
             let ci = self.canonicalize_args(&i);
             if ci != *i{
+                print!("wrong node: {:?}\n\n", i);
                 return false
             }
         }
@@ -126,7 +136,7 @@ impl EGraph{
             }
             print!("        parents: {:?} \n\n", c.parents);
         }
-        print!("dirty_unions {:?}\n", self.clean);
+        print!("dirty_unions {:?}\n", self.dirty_unions);
     }
 
     ///return the eclass of a given id
@@ -146,7 +156,7 @@ impl EGraph{
 //basic egraph manipulation
 impl EGraph{
     ///returns the canonical id and updates it for the given id
-    pub fn find_mut(&mut self, id:Id)-> Id{
+    pub fn find_mut(&mut self, id:&Id)-> Id{
         return self.unionfind.find_mut(id);
     }
 
@@ -176,11 +186,11 @@ impl EGraph{
         return new;
     }
 
-    ///canonicalizes an enode, updates its memo entry, and returns it
+    ///canonicalizes an enode, updates its memo entry, and returns it.
     ///does not update the eclasses
-    fn canonicalize_in_memo(&mut self, n: &Enode) -> Enode{
+    fn canonicalize_and_update_in_memo(&mut self, n: &Enode) -> Enode{
         if let Some(old_cid) = self.memo.swap_remove(n){
-            let new_cid = self.find_mut(old_cid);
+            let new_cid = self.find_mut(&old_cid);
             let newn = self.canonicalize_args(n);
             self.memo.insert(newn.clone(), new_cid);
             return newn;
@@ -217,7 +227,7 @@ impl EGraph{
     pub fn push_eclass(&mut self, enode: &mut Enode) -> Id{
         let id = self.lookup(enode);
         if let Some(id) = id{ //term already in the graph
-            return self.find_mut(id);
+            return self.find_mut(&id);
         }
         let id = self.unionfind.new_set();
         let eclass = EClass::new(enode.clone());
@@ -240,7 +250,7 @@ impl EGraph{
         if id1 == id2{return None }
 
         let id3 = self.unionfind.union(id1, id2);
-        self.clean = false;
+        self.dirty_unions.push(id3);
 
 
         let (to_id, from_id) = (id1, id2);
@@ -256,7 +266,7 @@ impl EGraph{
         to.nodes = IndexSet::<Enode>::new();
         // recanonize all nodes in memo and cls.
         for t in &mut nodes_temp.into_iter(){
-            let n = self.canonicalize_in_memo(&t);
+            let n = self.canonicalize_and_update_in_memo(&t);
             to.nodes.insert(n.clone());
         }
         
@@ -273,7 +283,8 @@ impl EGraph{
         let l = self.id_enode_pairs();
         let mut seen = IndexMap::<Enode, Id>::default();
         for (id, n) in &l {
-            let n = &self.canonicalize_in_memo(n);
+            let id = &self.find(*id);
+            let n = &self.canonicalize_and_update_in_memo(n);
             if seen.contains_key(n){
                 let id2 = seen.get(n).unwrap();
                 self.union(*id2, *id);
@@ -283,13 +294,34 @@ impl EGraph{
         }
     }
 
+    fn force_fix_parents(&mut self, id: &Id){
+        let id = self.find_mut(id);
+        let mut cls = self.get_eclass(&id).unwrap().clone();
+        let mut new_parents = Vec::<(Enode, Id)>::new();
+        for (p, id) in cls.parents.clone(){
+            let newp = self.canonicalize_and_update_in_memo(&p);
+            let id = self.find_mut(&id);
+            if self.memo.contains_key(&newp){
+                if !new_parents.contains(&(newp.clone(), id)){
+                    new_parents.push((newp, id));
+                }
+            }
+        }
+        cls.parents = new_parents;
+        self.classes.insert(id, cls);
+    }
+
     //calls repair on "dirty unions"
     //which first canonicalizes some nodes in memo
     //and then checks for additional congruences that might have formed
     pub fn rebuild(&mut self){
-        while !self.clean{
-            self.clean = true;
+        while self.dirty_unions.len()> 0{
+
+            self.dirty_unions = Vec::<Id>::new();
             self.force_fix_congruence();
+            for id in &self.get_ids(){
+                self.force_fix_parents(id);
+            }
         }
     }
 
@@ -474,8 +506,8 @@ impl EGraph{
                 let translator = matches.unwrap();
                 if let Some(id1) =  self.instantiate(lhs.clone(), &translator,&bufdict){
                     if let Some(id2) =  self.instantiate(rhs.clone(), &translator,&bufdict){
-                        let id1 = self.find_mut(id1);
-                        let id2 = self.find_mut(id2);
+                        let id1 = self.find_mut(&id1);
+                        let id2 = self.find_mut(&id2);
                         if let Some(_) = self.union(id1, id2){
                             edits += 1;
                         }

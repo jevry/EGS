@@ -42,7 +42,8 @@ impl UnionFind {
     }
 
     // finds the canonical ID, then sets all nodes in the set to point directly towards the canonical ID
-    pub fn find_mut(&mut self, mut current: Id) -> Id {
+    pub fn find_mut(&mut self, current: &Id) -> Id {
+        let mut current = *current;
         while current != self.parent(current) {
             let grandparent = self.parent(self.parent(current));
             *self.parent_mut(current) = grandparent;
@@ -53,8 +54,8 @@ impl UnionFind {
 
     /// unions 2 nodes and returns root(id1)
     pub fn union(&mut self, id1: Id, id2: Id) -> Id {
-        let root1 = self.find_mut(id1);
-        let root2 = self.find_mut(id2);
+        let root1 = self.find_mut(&id1);
+        let root2 = self.find_mut(&id2);
         *self.parent_mut(root2) = root1;
         return root1;
     }
@@ -66,7 +67,7 @@ impl UnionFind {
 
     pub fn canonicalize(&mut self){
         for i in 0..self.parents.len(){
-            self.find_mut(itoid!(i));
+            self.find_mut(&itoid!(i));
         }
     }
 

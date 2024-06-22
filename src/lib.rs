@@ -78,7 +78,7 @@ mod tests {
 
         // this compresses all paths
         for i in 0..n {
-            uf.find_mut(itoid!(i));
+            uf.find_mut(&itoid!(i));
         }
 
         print!("after compression:          {:?}\n", uf);
@@ -305,23 +305,20 @@ mod tests {
         let filepath = &format!("{PATH}chain.txt");
         let rulepath = &format!("src/rulesets/chain_ruleset.txt");
         let iter = 4;
-        let res = rewrite_extract(filepath, rulepath, iter, false);
+        let res = rewrite_extract(filepath, rulepath, iter, true);
         print!("{:?}\n",res);
         assert!(parser::parse_str("e").unwrap() == res);
     }
 
     #[test] ///extracts the best found term from a simplification ruleset
     fn extract_zeros(){
-        //(n x) -> x is the only used rule
-        //for some reason it fails to finish the last simplify step
-        //the issue is because of something in the rebuild function
         let filepath = &format!("{PATH}ints/add_zeros.txt");
         let rulepath = &format!("src/rulesets/recursive_rule.txt");
         let iter = 2;
         rewrite_extract(filepath, rulepath, iter, true);
     }
 
-    #[test] ///extracts the best found term from peano 2+2
+    #[test] ///extracts the best found term from  !!!!1
     fn extract_factorial(){
         //for some reason it finds 3+1 and fails to find 4
         //the issue is because of something in the rebuild function
@@ -347,7 +344,7 @@ mod tests {
         let filepath = &format!("{PATH}ints/example.txt");
         let rulepath = &format!("src/rulesets/rulesetA.txt");
         let iter = 2;
-        let res = rewrite_extract(filepath, rulepath, iter, false);
+        let res = rewrite_extract(filepath, rulepath, iter, true);
         assert!(parser::parse_str("a").unwrap() == res);
     }
 
@@ -364,7 +361,12 @@ mod tests {
         if show_g{
             g.print();
         }
-        
+
+        //assert that the graph is still correct
+        assert!(g.is_congruent());
+        assert!(g.is_canonical());
+
+
 
         if let Some(str) =  g.extract_logical(root_id){
             if let Ok(res) = parser::parse_str(&str){
