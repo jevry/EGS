@@ -61,6 +61,9 @@ pub fn rewrite_extract(filepath: &str, rulepath: &str, n: u32){
 
 
 
+
+
+
 //plotting some data, didn't really fit with the lib.rs tests
 #[cfg(test)]
 mod tests {
@@ -70,18 +73,18 @@ mod tests {
     extern crate plotters;
     use plotters::prelude::*;
 
+    use std::time::Instant;
 
-    static PATH: &str = "src/testsuite/";
+    static PATH: &str = "src/test terms/";
 
     /// to test rewriting a graph multiple times
-    /// default settings will cause the egraph to saturate after the 4th rewrite
-    /// after the 5th rewrite edits will return 0 and the number of eclasses and enodes stops changing
     #[test]
     pub fn egraph_mass_rewrite() {
+        let s = Instant::now();
         let filepath = format!("{PATH}ints/example.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
+        let root_id = g.insert_sexpr(sexp);
 
         //data
         let mut uf_size = Vec::<(i32, i32)>::new();
@@ -97,13 +100,30 @@ mod tests {
         n_classes.push((0, g.n_eclasses().try_into().unwrap()));
         edits.push((0,0));
         for i in 1..9{
+            let start = Instant::now();
             let edits1 = g.rewrite_ruleset(ruleset);
+            let duration = start.elapsed();
+            print!("t: {:?}\n", duration);
+
             uf_size.push((i, g.uf_len().try_into().unwrap()));
             n_enodes.push((i, g.n_enodes().try_into().unwrap()));
             n_classes.push((i, g.n_eclasses().try_into().unwrap()));
             edits.push((i, edits1));
         }
-        g.print();
+
+        if let Some(str) =  g.extract_logical(root_id){
+            if let Ok(res) = parser::parse_str(&str){
+                egs::pretty_print(&res, 10);
+            }
+        } else{
+            print!("\nFailure to find extractable sexpr\n");
+        }
+
+        print!("congruence {:?}\n", g.is_congruent());
+        print!("canonical  {:?}\n", g.is_canonical());
+
+        let duration = s.elapsed();
+        print!("total (not including graphing time): {:?}\n", duration);
 
         //plotting data stuff
         let mut edits_vec = Vec::<Vec<(i32, i32)>>::new();
@@ -123,7 +143,6 @@ mod tests {
         plot(eclasses_vec, "eclasses", "number of eclasses", empty.clone());
         
         plot(uf_size_vec, "uf and enodes", "amount", legend);
-
     }
 
 
@@ -134,6 +153,7 @@ mod tests {
     //if you run this test you will find that the test "fails", the egraph does not keep growing.
     //why is this the case? i'm not actually entirely sure. i know that the extract functiona voids repeating seen eclasses
     //but match_pattern needs no such safeguard.
+    //Most likely it's because the rewrite options aren't exhaustively explored by the matching algorithm
     fn infinite_saturation_attempt(){
         let filepath = format!("{PATH}ints/mult_by_zero.txt");
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
@@ -158,14 +178,6 @@ mod tests {
         g.print();
         print!("{:?}", uf_size);
     }
-
-
-
-
-
-
-
-
 
 
 

@@ -235,7 +235,8 @@ impl EGraph{
 
         self.memo.insert(enode.clone(), id);
 
-        for &child in &enode.args{ // set parent pointers
+        for child in &enode.args{ // set parent pointers
+            let child = self.find(*child);
             let idx = self.classes.get_index_of(&child).unwrap();
             self.classes[idx].parents.push((enode.clone(), id));
         }

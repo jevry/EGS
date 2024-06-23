@@ -21,3 +21,6 @@
 #simplification rules
 (/ P_c P_c) -> 1
 (* P_a 1) -> P_a
+
+#ifelse
+(ifelse true P_x P_y) -> P_x

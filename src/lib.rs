@@ -94,7 +94,7 @@ mod tests {
     ///example of pattern.rs
     #[test]
     fn construct_rule(){
-        static PATH: &str = "src/rulesets/";
+        static PATH: &str = "src/test terms/";
         static FILENAME: &str = "rulesetA.txt";
         let filepath = format!("{PATH}{FILENAME}");
 
@@ -119,7 +119,7 @@ mod tests {
     use crate::pattern::read_ruleset;
     use crate::pattern::new_pattern;
 
-    static PATH: &str = "src/testsuite/";
+    static PATH: &str = "src/test terms/";
     static FILENAME: &str = "ints/example.txt";
 
     #[test] ///run this test function to see graph construction
