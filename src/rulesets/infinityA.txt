@@ -1,0 +1,19 @@
+# according to zhao's slides associativity does not terminate
+# in our case because * x 0 leads to 0 which can be written as * x 0 which means we have term (* *(x 0) *(x 0)) which can be rewritten as (* (* 0 0) (* x x))
+# this ruleset is to test that.
+# tldr: our implementation terminates, and i'm not completely sure why, but most likely it's because of the matching algorithm not returning *all* matches.
+# see: main.rs
+
+#simplification rule
+(* P_x 0) -> 0
+
+#commutativity
+(* P_x P_y) -> (* P_y P_x)
+
+#associativity
+#(* (* P_x P_y) P_z) -> (* P_x (* P_y P_z))
+#(* P_x (* P_y P_z)) -> (* (* P_x P_y) P_z)
+
+#pairwise associativity
+(* (* P_a P_b) (* P_c P_d)) -> (* (* P_a P_d) (* P_c P_b))
+

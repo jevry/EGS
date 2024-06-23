@@ -12,11 +12,12 @@
  * for the rest this file can be safely ignored
  * 
  * Some rustic things that might be usefull to know:
- * - use /// to indicate that a comment is outer line doc
- * - 'return n' can be rewritten as 'n', though
- * for clarity sake this isnt used in this library
- * - #[derive()] auto generates certain functionality for structs and enums
+ * - use /// to indicate that a comment should show up in the function tooltip
+ * - 'return n;' can be rewritten as just 'n', though
+ *          for clarity sake this isnt used in this library
+ * - #[derive(...)] auto generates certain functionality for structs and enums
  * - in lib.rs are some test functions, you can run these in vsc or from the terminal
+ * 
  */
 
 use egs;
@@ -104,6 +105,7 @@ mod tests {
         }
         g.print();
 
+        //plotting data stuff
         let mut edits_vec = Vec::<Vec<(i32, i32)>>::new();
         edits_vec.push(edits);
         let mut uf_size_vec = Vec::<Vec<(i32, i32)>>::new();
@@ -123,6 +125,48 @@ mod tests {
         plot(uf_size_vec, "uf and enodes", "amount", legend);
 
     }
+
+
+    #[test]
+    //in theory associativity does not terminate, this test is to try and forcibly trigger this condition
+    //so a "success" is a e-graph that never stops growing.
+    //
+    //if you run this test you will find that the test "fails", the egraph does not keep growing.
+    //why is this the case? i'm not actually entirely sure. i know that the extract functiona voids repeating seen eclasses
+    //but match_pattern needs no such safeguard.
+    fn infinite_saturation_attempt(){
+        let filepath = format!("{PATH}ints/mult_by_zero.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.insert_sexpr(sexp);
+
+        //data
+        let mut uf_size = Vec::<i32>::new();
+
+        //ruleset can either be infinityA or infinityB
+        let ruleset = &read_ruleset(&format!("src/rulesets/infinityA.txt"));
+
+        //run rewrite saturation
+        uf_size.push(g.uf_len().try_into().unwrap());
+        // n_enodes.push((0, g.n_enodes().try_into().unwrap()));
+        // n_classes.push((0, g.n_eclasses().try_into().unwrap()));
+        // edits.push((0,0));
+        for _ in 1..9{
+            g.rewrite_ruleset(ruleset);
+            uf_size.push(g.uf_len().try_into().unwrap());
+        }
+        g.print();
+        print!("{:?}", uf_size);
+    }
+
+
+
+
+
+
+
+
+
 
 
 
