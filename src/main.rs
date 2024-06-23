@@ -8,7 +8,8 @@
  * -------------------------
  * The main file, used as a import test and showcase.
  * lib.rs is the "main" file that collects and reexports the other files.
- * this file can be safely ignored
+ * also houses some plotting functions to plot some data about the e-graphs
+ * for the rest this file can be safely ignored
  * 
  * Some rustic things that might be usefull to know:
  * - use /// to indicate that a comment is outer line doc
@@ -54,5 +55,139 @@ pub fn rewrite_extract(filepath: &str, rulepath: &str, n: u32){
         }
     } else{
         print!("\nFailure to find extractable sexpr\n");
+    }
+}
+
+
+
+//plotting some data, didn't really fit with the lib.rs tests
+#[cfg(test)]
+mod tests {
+    use super::*; //allows this module to use previous scope
+    use egs::EGraph;
+    use egs::pattern::read_ruleset;
+    extern crate plotters;
+    use plotters::prelude::*;
+
+
+    static PATH: &str = "src/testsuite/";
+
+    /// to test rewriting a graph multiple times
+    /// default settings will cause the egraph to saturate after the 4th rewrite
+    /// after the 5th rewrite edits will return 0 and the number of eclasses and enodes stops changing
+    #[test]
+    pub fn egraph_mass_rewrite() {
+        let filepath = format!("{PATH}ints/example.txt");
+        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
+        let mut g = EGraph::new();
+        g.insert_sexpr(sexp);
+
+        //data
+        let mut uf_size = Vec::<(i32, i32)>::new();
+        let mut n_enodes = Vec::<(i32, i32)>::new();
+        let mut n_classes = Vec::<(i32, i32)>::new();
+        let mut edits = Vec::<(i32, i32)>::new();
+
+        let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
+
+        //run rewrite saturation
+        uf_size.push((0, g.uf_len().try_into().unwrap()));
+        n_enodes.push((0, g.n_enodes().try_into().unwrap()));
+        n_classes.push((0, g.n_eclasses().try_into().unwrap()));
+        edits.push((0,0));
+        for i in 1..9{
+            let edits1 = g.rewrite_ruleset(ruleset);
+            uf_size.push((i, g.uf_len().try_into().unwrap()));
+            n_enodes.push((i, g.n_enodes().try_into().unwrap()));
+            n_classes.push((i, g.n_eclasses().try_into().unwrap()));
+            edits.push((i, edits1));
+        }
+        g.print();
+
+        let mut edits_vec = Vec::<Vec<(i32, i32)>>::new();
+        edits_vec.push(edits);
+        let mut uf_size_vec = Vec::<Vec<(i32, i32)>>::new();
+        uf_size_vec.push(uf_size);
+        uf_size_vec.push(n_enodes);
+        let mut eclasses_vec = Vec::<Vec<(i32, i32)>>::new();
+        eclasses_vec.push(n_classes);
+
+        let empty = Vec::<&str>::new();
+        let mut legend = Vec::<&str>::new();
+        legend.push("unionfind size");
+        legend.push("number of enodes");
+
+        plot(edits_vec, "edits", "Δ number of edits", empty.clone());
+        plot(eclasses_vec, "eclasses", "number of eclasses", empty.clone());
+        
+        plot(uf_size_vec, "uf and enodes", "amount", legend);
+
+    }
+
+
+
+    fn plot(data_vectors: Vec<Vec<(i32, i32)>>, name: &str, xaxis: &str, legend: Vec<&str>) {
+        // Create a drawing backend with a size of 640x480 pixels
+        let filename = format!("{}.png", name);
+        let root_area = BitMapBackend::new(&filename, (640, 480))
+          .into_drawing_area();
+        let w: i32 = data_vectors[0].len().try_into().unwrap();
+        let h = data_vectors.iter().flat_map(|vec| vec.iter())
+          .map(|&(_, y)| y).max().unwrap_or(0);
+        let h = h+5-(h%5);
+
+        // Fill the background with white color
+        root_area.fill(&WHITE).unwrap();
+
+        // Create a chart context
+        let mut chart = ChartBuilder::on(&root_area)
+          .margin(10)
+          .x_label_area_size(45)
+          .y_label_area_size(45)
+          .build_cartesian_2d(0..(w-1), 0..h)
+          .unwrap();
+
+        // Configure the mesh (grid lines, tick marks, etc.) and set axis labels
+        chart.configure_mesh()
+          .x_desc("Number of applied rewrites")
+          .y_desc(xaxis)
+          .x_label_style(("sans-serif", 18).into_font())
+          .y_label_style(("sans-serif", 18).into_font())
+          .draw()
+          .unwrap();
+
+
+        
+        // Plot each data vector
+        for (i, data) in data_vectors.iter().enumerate() {
+            // Colors to use for the different series
+            let colors = vec![&RED, &BLUE, &GREEN];
+            if legend.len() == 0{
+                chart.draw_series(LineSeries::new(
+                    data.clone(),
+                    colors[i % colors.len()],
+                )).unwrap();
+            }
+            else {
+            chart.draw_series(LineSeries::new(
+                data.clone(),
+                colors[i % colors.len()],
+            )).unwrap()
+            .label(format!("{}", legend[i] ))
+            .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], colors[i % colors.len()]));
+            }
+        }
+
+        if legend.len() != 0{
+            // Configure the legend
+            chart.configure_series_labels()
+              .background_style(&WHITE.mix(0.8))
+              .border_style(&BLACK)
+              .draw()
+              .unwrap();
+        }
+
+    // Save the result to a file
+    root_area.present().unwrap();
     }
 }

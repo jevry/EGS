@@ -1,1 +1,4 @@
 /target
+
+#images should definitely be ignored lol
+*.png

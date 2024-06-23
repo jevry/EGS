@@ -109,7 +109,6 @@ mod tests {
                         print!("{:?}\n", r.rhs);
                     }
                 }
-
             }
         }
     }
@@ -201,6 +200,7 @@ mod tests {
 
     }
 
+
     #[test] ///to test rewriting a graph once
     fn egraph_rewrite() {
         let filepath = format!("{PATH}ints/mult.txt");
@@ -216,37 +216,9 @@ mod tests {
         g.rewrite_lhs_to_rhs(r);
         g.print();
     }
-
-    /// to test rewriting a graph multiple times
-    /// default settings will cause the egraph to saturate after the 4th rewrite
-    /// after the 5th rewrite edits will return 0 and the number of eclasses and enodes stops changing
-    #[test]
-    pub fn egraph_mass_rewrite() {
-        let filepath = format!("{PATH}ints/example.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
-        print!("\nnew egraph: ");
-        g.print();
+    
 
 
-        let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
-        let edits1 = g.rewrite_ruleset(ruleset);
-        let edits2 = g.rewrite_ruleset(ruleset);
-        let edits3 = g.rewrite_ruleset(ruleset);
-        let edits4 = g.rewrite_ruleset(ruleset);
-        let edits5 = g.rewrite_ruleset(ruleset);
-        g.print();
-        print!("1st pass edits: {}\n", edits1);
-        print!("2nd pass edits: {}\n", edits2);
-        print!("3rd pass edits made: {}\n", edits3);
-        print!("4th pass edits made: {}\n", edits4);
-        print!("5th pass edits made: {}\n", edits5);
-        print!("uf_size = {}\n", g.uf_len());
-        print!("enodes = {}\n", g.n_enodes());
-        print!("eclasses = {}\n", g.n_eclasses());
-
-    }
 
     /*-------------------- EXTRACT TESTS --------------------*/
 

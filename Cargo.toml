@@ -10,9 +10,10 @@ edition = "2021"
 #for random numbers, purely to test term extraction
 rand = "0.8.5"
 
+#for plotting stuff
+plotters = "0.3.1"
 
-#bijectivemap
-bimap = "0.6.3"
+
 
 
 # hashmap stuff
