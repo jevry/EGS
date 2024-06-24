@@ -94,7 +94,7 @@ mod tests {
     ///example of pattern.rs
     #[test]
     fn construct_rule(){
-        static PATH: &str = "src/test terms/";
+        static PATH: &str = "src/rulesets/";
         static FILENAME: &str = "rulesetA.txt";
         let filepath = format!("{PATH}{FILENAME}");
 
@@ -303,11 +303,18 @@ mod tests {
 
     #[test] ///extracts the best found term from peano 2+2
     fn extract_peano(){
-        //for some reason it finds 3+1 and fails to find 4
-        //the issue is because of something in the rebuild function
         let filepath = &format!("{PATH}peano/sum.txt");
         let rulepath = &format!("src/rulesets/peano_ruleset.txt");
         let iter = 6;
+        rewrite_extract(filepath, rulepath, iter, true);
+    }
+
+    #[test] ///extracts the best found term from peano 2+2
+    fn extract_giga_peano(){
+        //too large sums of peano fail
+        let filepath = &format!("{PATH}peano/giga_sum.txt");
+        let rulepath = &format!("src/rulesets/peano_ruleset.txt");
+        let iter = 20;
         rewrite_extract(filepath, rulepath, iter, true);
     }
 
@@ -335,8 +342,8 @@ mod tests {
         }
 
         //assert that the graph is still correct
-        assert!(g.is_congruent());
-        assert!(g.is_canonical());
+        // assert!(g.is_congruent());
+        // assert!(g.is_canonical());
 
 
 

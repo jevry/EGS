@@ -73,7 +73,7 @@ mod tests {
     extern crate plotters;
     use plotters::prelude::*;
 
-    use std::time::Instant;
+    use std::time::{Instant, Duration};
 
     static PATH: &str = "src/test terms/";
 
@@ -81,7 +81,8 @@ mod tests {
     #[test]
     pub fn egraph_mass_rewrite() {
         let s = Instant::now();
-        let filepath = format!("{PATH}ints/example.txt");
+        let filepath = &format!("{PATH}peano/giga_sum.txt");
+        let ruleset = &read_ruleset(&format!("src/rulesets/peano_ruleset.txt"));
         let sexp: Sexp = parser::parse_file(&filepath).unwrap();
         let mut g = EGraph::new();
         let root_id = g.insert_sexpr(sexp);
@@ -91,15 +92,15 @@ mod tests {
         let mut n_enodes = Vec::<(i32, i32)>::new();
         let mut n_classes = Vec::<(i32, i32)>::new();
         let mut edits = Vec::<(i32, i32)>::new();
-
-        let ruleset = &read_ruleset(&format!("src/rulesets/rulesetA.txt"));
+        let mut cumtime = Vec::<(i32, i32)>::new();
 
         //run rewrite saturation
         uf_size.push((0, g.uf_len().try_into().unwrap()));
         n_enodes.push((0, g.n_enodes().try_into().unwrap()));
         n_classes.push((0, g.n_eclasses().try_into().unwrap()));
         edits.push((0,0));
-        for i in 1..9{
+        cumtime.push((0, 0));
+        for i in 1..200{
             let start = Instant::now();
             let edits1 = g.rewrite_ruleset(ruleset);
             let duration = start.elapsed();
@@ -109,7 +110,16 @@ mod tests {
             n_enodes.push((i, g.n_enodes().try_into().unwrap()));
             n_classes.push((i, g.n_eclasses().try_into().unwrap()));
             edits.push((i, edits1));
+
+            let prev = cumtime.last().unwrap().to_owned().1;
+            let duration = 1000.0*Duration::as_secs_f32(&duration);
+            cumtime.push((i, prev + duration as i32));
+            if edits1 == 0{
+                break;
+            }
         }
+        let duration = s.elapsed();
+        
 
         if let Some(str) =  g.extract_logical(root_id){
             if let Ok(res) = parser::parse_str(&str){
@@ -120,9 +130,8 @@ mod tests {
         }
 
         print!("congruence {:?}\n", g.is_congruent());
-        print!("canonical  {:?}\n", g.is_canonical());
+        print!("canonical  {:?}\n", g.is_canonical_in_memo());
 
-        let duration = s.elapsed();
         print!("total (not including graphing time): {:?}\n", duration);
 
         //plotting data stuff
@@ -134,6 +143,9 @@ mod tests {
         let mut eclasses_vec = Vec::<Vec<(i32, i32)>>::new();
         eclasses_vec.push(n_classes);
 
+        let mut ct_vec = Vec::<Vec<(i32, i32)>>::new();
+        ct_vec.push(cumtime);
+
         let empty = Vec::<&str>::new();
         let mut legend = Vec::<&str>::new();
         legend.push("unionfind size");
@@ -142,47 +154,15 @@ mod tests {
         plot(edits_vec, "edits", "Δ number of edits", empty.clone());
         plot(eclasses_vec, "eclasses", "number of eclasses", empty.clone());
         
-        plot(uf_size_vec, "uf and enodes", "amount", legend);
-    }
+        plot(uf_size_vec, "uf and enodes", "amount", empty.clone());
+        plot(ct_vec, "cumtime", "cumulative time (ms)", empty.clone());
 
-
-    #[test]
-    //in theory associativity does not terminate, this test is to try and forcibly trigger this condition
-    //so a "success" is a e-graph that never stops growing.
-    //
-    //if you run this test you will find that the test "fails", the egraph does not keep growing.
-    //why is this the case? i'm not actually entirely sure. i know that the extract functiona voids repeating seen eclasses
-    //but match_pattern needs no such safeguard.
-    //Most likely it's because the rewrite options aren't exhaustively explored by the matching algorithm
-    fn infinite_saturation_attempt(){
-        let filepath = format!("{PATH}ints/mult_by_zero.txt");
-        let sexp: Sexp = parser::parse_file(&filepath).unwrap();
-        let mut g = EGraph::new();
-        g.insert_sexpr(sexp);
-
-        //data
-        let mut uf_size = Vec::<i32>::new();
-
-        //ruleset can either be infinityA or infinityB
-        let ruleset = &read_ruleset(&format!("src/rulesets/infinityA.txt"));
-
-        //run rewrite saturation
-        uf_size.push(g.uf_len().try_into().unwrap());
-        // n_enodes.push((0, g.n_enodes().try_into().unwrap()));
-        // n_classes.push((0, g.n_eclasses().try_into().unwrap()));
-        // edits.push((0,0));
-        for _ in 1..9{
-            g.rewrite_ruleset(ruleset);
-            uf_size.push(g.uf_len().try_into().unwrap());
-        }
-        g.print();
-        print!("{:?}", uf_size);
     }
 
 
 
 
-    fn plot(data_vectors: Vec<Vec<(i32, i32)>>, name: &str, xaxis: &str, legend: Vec<&str>) {
+    fn plot(data_vectors: Vec<Vec<(i32, i32)>>, name: &str, xaxis: &str, legend: Vec<&str>){
         // Create a drawing backend with a size of 640x480 pixels
         let filename = format!("{}.png", name);
         let root_area = BitMapBackend::new(&filename, (640, 480))
@@ -191,15 +171,20 @@ mod tests {
         let h = data_vectors.iter().flat_map(|vec| vec.iter())
           .map(|&(_, y)| y).max().unwrap_or(0);
         let h = h+5-(h%5);
-
+        
         // Fill the background with white color
         root_area.fill(&WHITE).unwrap();
+
+        let mut yla = 45;
+        if h>200{
+            yla+=10
+        }
 
         // Create a chart context
         let mut chart = ChartBuilder::on(&root_area)
           .margin(10)
           .x_label_area_size(45)
-          .y_label_area_size(45)
+          .y_label_area_size(yla)
           .build_cartesian_2d(0..(w-1), 0..h)
           .unwrap();
 

@@ -36,7 +36,7 @@ pub struct EGraph{
     pub(crate) unionfind:    UnionFind,
     pub(crate) memo:         IndexMap<Enode, Id>,  //memory to store future term IDs
     pub(crate) classes:      IndexMap<Id,EClass>,
-    dirty_unions: Vec<Id>,
+    dirty_unions: Vec<Id>, //could be replaced with a bool because we force_fix_congruence every e-class anyways
 }
 impl EGraph{
     /// create a new empty egraph
@@ -88,13 +88,29 @@ impl EGraph{
         return has_unique_elements(nodes);
     }
 
-    ///debugging: returns wheter the egraph is currently canonical or not.
+    ///debugging: returns wheter the egraph is currently canonical in memo or not.
     ///returns false if not all enodes are canonical.
-    pub fn is_canonical(&self) -> bool{
+    pub fn is_canonical_in_memo(&self) -> bool{
         let nodes = self.memo.iter();
         for (i, _) in nodes{
             let ci = self.canonicalize_args(&i);
             if ci != *i{
+                print!("wrong node: {:?}\n\n", i);
+                return false
+            }
+        }
+        return true
+    }
+
+    ///debugging: returns wheter the egraph is currently canonical in full or not.
+    ///returns false if not all enodes are canonical.
+    ///seperated because very rarely the eclasses themselves could contain a uncanonical e-node after force_fix_congruence.
+    ///though they don't impact anything.
+    pub fn is_canonical_full(&self) -> bool{
+        let nodes = self.id_enode_pairs();
+        for (_, i) in nodes{
+            let ci = self.canonicalize_args(&i);
+            if ci != i{
                 print!("wrong node: {:?}\n\n", i);
                 return false
             }
@@ -248,7 +264,7 @@ impl EGraph{
     ///returns None if the 2 classes are already in the same class
     ///DOES NOT CANONICALISE INPUT IDs FOR YOU!!!
     pub fn union(&mut self, id1: Id, id2: Id) -> Option<Id> {
-        if id1 == id2{return None }
+        if id1 == id2{return None } //cant union with yourself
 
         let id3 = self.unionfind.union(id1, id2);
         self.dirty_unions.push(id3);
@@ -408,12 +424,12 @@ impl EGraph{
     /// when this happens the optimal rewrite can fail to be inserted into the egraph.
     pub(crate) fn match_pattern_with_enode(&self, n: &Enode, p: &Pattern, sub: &mut IndexMap<Enode, Id>) -> Option<IndexMap<Pattern, Enode>> {
         if let Pattern::PatVar(s) = p {
-        let mut m = IndexMap::<Pattern, Enode>::default();
-            m.insert(Pattern::PatVar(s.clone()), n.clone()); //probably 1
-            if let Some(id) = self.lookup(&mut n.clone()) {
-                sub.insert(n.clone(), id);
-            } else {panic!("failed to find eclass {:?}\n", n)}
-        return Some(m);
+            let mut m = IndexMap::<Pattern, Enode>::default();
+                m.insert(Pattern::PatVar(s.clone()), n.clone()); //probably 1
+                if let Some(id) = self.lookup(&mut n.clone()) {
+                    sub.insert(n.clone(), id);
+                } else {panic!("failed to find eclass {:?}\n", n)}
+            return Some(m);
         }
         else if let Pattern::PatTerm(p_head, p_args) = p {
             //returns the first found matching term

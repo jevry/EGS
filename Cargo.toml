@@ -15,7 +15,6 @@ plotters = "0.3.1"
 
 
 
-
 # hashmap stuff
 fxhash = "0.2.1"
 hashbrown = "0.12.1"

@@ -1,6 +1,0 @@
-# because ruleset A doesnt trigger infinitely expanding rules
-# lets try forcibly expading it.
-# result: doesn't work
-# see: main.rs
-
-P_x -> (+ P_x 1)
