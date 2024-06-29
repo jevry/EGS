@@ -1,3 +1,15 @@
+/*
+ * util.rs
+ * -------------------------
+ * Author  : Kieran van Gelder
+ * Id      : 14033623
+ * Date    : 2024
+ * Version : 0.1
+ * -------------------------
+ * some utility miscelanious functions
+ */
+
+
 //to do the sexp stuff
 use symbolic_expressions::Sexp;
 
