@@ -3,7 +3,7 @@ use crate::itoid;
 use std::fmt::Debug;
 use std::vec::Vec;
 
-//originates from the egg library
+//mostly originates from the egg library
 //required for the Egraphs themselves
 
 #[derive(Debug, Clone, Default)]

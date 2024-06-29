@@ -311,6 +311,7 @@ impl EGraph{
         }
     }
 
+    ///forcefully restores the canonicality of the parents of the given eclass id
     fn force_fix_parents(&mut self, id: &Id){
         let id = self.find_mut(id);
         let mut cls = self.get_eclass(&id).unwrap().clone();

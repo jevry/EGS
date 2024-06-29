@@ -16,9 +16,9 @@ use crate::Enode;
 ///the eclass struct itself
 #[derive(Clone, Debug)]
 pub struct EClass {
-    //Nodes part of this Eclass, indexmap is usefull because duplicates are useless and break congruence verification
+    //Nodes part of this Eclass, indexset is usefull because duplicates are useless and break congruence verification
     pub nodes: IndexSet<Enode>,
-    
+
     //Parent Eclasses that point towards this Eclass
     pub parents: Vec::<(Enode, Id)>
 }
@@ -27,15 +27,6 @@ impl EClass {
     pub fn new(node: Enode) -> EClass{
         let mut termvec = IndexSet::<Enode>::new();
         termvec.insert(node);
-        let res = EClass {
-            nodes: termvec,
-            parents: Vec::<(Enode, Id)>::new()
-        };
-        return res;
-    }
-
-    pub fn empty() -> EClass{
-        let termvec = IndexSet::<Enode>::new();
         let res = EClass {
             nodes: termvec,
             parents: Vec::<(Enode, Id)>::new()

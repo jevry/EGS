@@ -23,9 +23,10 @@ impl From<Id> for usize { //cast Id to usize, used as usize::from(n)
     }
 }
 
-//
-#[macro_export]//export macro
-macro_rules! itoid { // Int_TO_ID; simplify Id::from function
+///Int_To_ID; a macro to simplify the Id::from function.
+///Converts an int to an id
+#[macro_export]
+macro_rules! itoid {
     ( $($x:expr)? ) =>{
         $( Id::from($x) )+
     };
